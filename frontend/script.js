@@ -19,6 +19,10 @@ let currentTestCase = 0;
 let testCases = [];
 let testResults = [];
 
+// --- HINTS FEATURE STATE ---
+let challengeHints = []; // Array of hints for the current challenge
+let revealedHints = [];  // Indices of revealed hints (reset on new challenge)
+
 // Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initEditor();
@@ -89,12 +93,35 @@ function updateActiveTestCaseButton() {
     });
 }
 
-function showTestCase(index) {
-    const testInputDisplay = document.getElementById('testInputDisplay');
-    const testExpectedDisplay = document.getElementById('testExpectedDisplay');
-    const testActualDisplay = document.getElementById('testActualDisplay');
-    const testResultBadge = document.getElementById('testResultBadge');
-    const actualOutputSection = document.getElementById('actualOutputSection');
+// Helper to get test panel elements by context
+function getTestPanelElements(context = 'main') {
+    if (context === 'results') {
+        return {
+            testInputDisplay: document.querySelector('.results-test-input-display'),
+            testExpectedDisplay: document.querySelector('.results-test-expected-display'),
+            testActualDisplay: document.querySelector('.results-test-actual-display'),
+            testResultBadge: document.querySelector('.results-test-result-badge'),
+            actualOutputSection: document.querySelector('.results-actual-output-section'),
+        };
+    } else {
+        return {
+            testInputDisplay: document.getElementById('testInputDisplay'),
+            testExpectedDisplay: document.getElementById('testExpectedDisplay'),
+            testActualDisplay: document.getElementById('testActualDisplay'),
+            testResultBadge: document.getElementById('testResultBadge'),
+            actualOutputSection: document.getElementById('actualOutputSection'),
+        };
+    }
+}
+
+function showTestCase(index, context = 'main') {
+    const {
+        testInputDisplay,
+        testExpectedDisplay,
+        testActualDisplay,
+        testResultBadge,
+        actualOutputSection
+    } = getTestPanelElements(context);
     
     if (testCases[index]) {
         // Display input and expected output
@@ -122,7 +149,11 @@ function initEventListeners() {
     document.getElementById('hintBtn').addEventListener('click', showHint);
     document.getElementById('language').addEventListener('change', changeLanguage);
     document.getElementById('loadRandomBtn').addEventListener('click', loadRandomChallenge);
-    document.getElementById('runAllTests').addEventListener('click', runTests);
+    document.getElementById('runAllTests').addEventListener('click', runAllTestsAndSubmit);
+    // Results panel run all tests button (class-based)
+    document.querySelectorAll('.results-run-all-tests').forEach(btn => {
+        btn.addEventListener('click', runAllTestsAndSubmit);
+    });
 }
 
 // Initialize UI handlers for modals and notifications
@@ -384,7 +415,7 @@ function applyTheme(difficulty) {
     const body = document.body;
     
     // Remove existing theme classes
-    body.classList.remove('theme-basic', 'theme-intermediate', 'theme-expert');
+    body.classList.remove('theme-basic', 'theme-intermediate', 'theme-advanced');
     
     // Apply new theme based on difficulty
     switch (difficulty.toLowerCase()) {
@@ -395,8 +426,7 @@ function applyTheme(difficulty) {
             body.classList.add('theme-intermediate');
             break;
         case 'advanced':
-        case 'expert':
-            body.classList.add('theme-expert');
+            body.classList.add('theme-advanced');
             break;
         default:
             body.classList.add('theme-basic');
@@ -404,445 +434,155 @@ function applyTheme(difficulty) {
     }
 }
 
-// Show hint functionality
+// Show hint functionality (now robust, array-based, and sidebar-aware)
 function showHint() {
-    if (hintsUsed < 3 && currentChallenge) {
-        hintsUsed++;
-        score = Math.max(0, score - 2);
-        updateScore();
-        
-        let hintText = "";
-        if (hintsUsed === 1 && currentChallenge.hint_1) {
-            hintText = currentChallenge.hint_1;
-        } else if (hintsUsed === 2 && currentChallenge.hint_2) {
-            hintText = currentChallenge.hint_2;
-        } else if (hintsUsed === 3 && currentChallenge.hint_3) {
-            hintText = currentChallenge.hint_3;
-        } else {
-            const fallbackHints = {
-                python: [
-                    "Hint 1: What happens when you divide by zero? You need to handle empty lists somehow!",
-                    "Hint 2: Multiple approaches work: if/else check, try/catch, or using built-in functions. Pick your style!",
-                    "Hint 3: Focus on the OUTPUT: empty list should return 0. How you achieve this is up to you!"
-                ],
-                javascript: [
-                    "Hint 1: Starting with max = 0 fails for negative-only arrays. Think about better initialization!",
-                    "Hint 2: Many solutions exist: arr[0], Math.max(...arr), reduce, etc. Choose what feels natural!",
-                    "Hint 3: Focus on correct OUTPUT: your solution is valid if it passes all test cases!"
-                ],
-                java: [
-                    "Hint 1: Starting with min = 0 fails for negative-only arrays. Think about better initialization!",
-                    "Hint 2: Try initializing min with the first element of the array instead of 0!",
-                    "Hint 3: What if you set min = numbers[0] and start the loop from index 1?"
-                ],
-                cpp: [
-                    "Hint 1: Look at the loop condition. What happens when i equals numbers.size()?",
-                    "Hint 2: Arrays/vectors are zero-indexed. If size is 5, valid indices are 0-4, not 0-5!",
-                    "Hint 3: Change <= to < in the for loop condition. Multiple solutions work!"
-                ]
-            };
-            hintText = fallbackHints[currentLanguage]?.[hintsUsed - 1] || "No more hints available!";
-        }
-        
-        showHintModal(hintText);
-        
-        const hintBtn = document.getElementById('hintBtn');
-        if (hintsUsed >= 3) {
-            hintBtn.disabled = true;
-            hintBtn.innerHTML = '<i class="fas fa-lightbulb"></i>No More Hints';
-        } else {
-            hintBtn.innerHTML = `<i class="fas fa-lightbulb"></i>Hint (-2 pts) [${3 - hintsUsed} left]`;
-        }
-    } else if (hintsUsed >= 3) {
+    if (!challengeHints || challengeHints.length === 0) {
+        showResultsNotification('No Hints', 'No hints are available for this challenge.', 'info');
+        return;
+    }
+    // Find the next unrevealed hint
+    const nextHintIdx = revealedHints.length;
+    if (nextHintIdx >= challengeHints.length) {
         showResultsNotification('No More Hints', 'You have used all available hints for this challenge.', 'warning');
-    }
-}
-
-// Update score display
-function updateScore() {
-    document.getElementById('scoreValue').textContent = score;
-}
-
-// Run test cases
-async function runTests() {
-    if (!currentChallenge) {
-        showResultsNotification('Challenge Loading', 'Please wait for challenge to load...', 'warning');
+        updateHintsDisplay(); // Ensure button disables
         return;
     }
-    
-    attempts++;
-    testResults = []; // Clear previous results
-    
-    const runButton = document.getElementById('runCode');
-    runButton.disabled = true;
-    runButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Running...';
-    
-    let passedTests = 0;
-    let totalTests = testCases.length;
-    
-    // Run each test case
-    for (let i = 0; i < testCases.length; i++) {
-        try {
-            const testCase = testCases[i];
-            let testCode = editor.getValue() + '\n\n';
-            const functionName = extractFunctionName(editor.getValue(), currentLanguage);
-            
-            if (currentLanguage === 'python') {
-                testCode += `# Test case ${i + 1}\nresult = ${functionName}(${testCase.input})\nprint(result)`;
-            } else if (currentLanguage === 'javascript') {
-                testCode += `// Test case ${i + 1}\nconst result = ${functionName}(${testCase.input});\nconsole.log(result);`;
-            } else if (currentLanguage === 'java') {
-                const javaInput = testCase.input.replace(/\[/g, '{').replace(/\]/g, '}');
-                testCode += `\npublic static void main(String[] args) {\n    int[] testArray = ${javaInput};\n    int result = ${functionName}(testArray);\n    System.out.println(result);\n}`;
-            } else if (currentLanguage === 'cpp') {
-                const cppInput = testCase.input.replace(/\[/g, '{').replace(/\]/g, '}');
-                testCode += `\nint main() {\n    vector<int> testArray = ${cppInput};\n    int result = ${functionName}(testArray);\n    cout << result << endl;\n    return 0;\n}`;
-            }
-            
-            const result = await executeCode(testCode);
-            const output = (result.run.stdout || '').trim();
-            const error = result.run.stderr || '';
-            
-            let actualOutput = output;
-            let passed = false;
-            
-            if (error) {
-                actualOutput = `Error: ${error}`;
-                passed = false;
-            } else {
-                // Compare output with expected
-                const expected = testCase.expected_output.toString().trim();
-                passed = output === expected;
-                if (passed) passedTests++;
-            }
-            
-            testResults[i] = {
-                passed: passed,
-                actual_output: actualOutput,
-                expected_output: testCase.expected_output
-            };
-            
-        } catch (error) {
-            testResults[i] = {
-                passed: false,
-                actual_output: `Error: ${error.message}`,
-                expected_output: testCases[i].expected_output
-            };
-        }
-    }
-    
-    // Update UI
-    updateActiveTestCaseButton();
-    showTestCase(currentTestCase);
-    
-    // Update test summary
-    const passedCount = document.querySelector('.passed-count');
-    const totalCount = document.querySelector('.total-count');
-    const testSummary = document.getElementById('testSummary');
-    
-    if (passedCount) passedCount.textContent = passedTests;
-    if (totalCount) totalCount.textContent = totalTests;
-    
-    // Show test summary when there are results
-    if (testSummary && testResults.length > 0) {
-        testSummary.style.display = 'block';
-    }
-    
-    // Re-enable run button
-    runButton.disabled = false;
-    runButton.innerHTML = '<i class="fas fa-play"></i>Run';
-    
-    // Show brief notification in top-right corner
-    if (passedTests === totalTests) {
-        showResultsNotification('All Tests Passed!', `Great job! All ${totalTests} test cases passed.`, 'success');
-    } else {
-        showResultsNotification('Tests Completed', `${passedTests}/${totalTests} test cases passed. Keep trying!`, 'warning');
-    }
+    // Reveal next hint
+    revealedHints.push(nextHintIdx);
+    hintsUsed = revealedHints.length;
+    score = Math.max(0, score - 2);
+    updateScore();
+    updateHintsSidebar();
+    updateHintsDisplay();
+    // Show notification
+    showResultsNotification('Hint Revealed', `Hint ${nextHintIdx + 1} has been revealed! (-2 points)`, 'info');
 }
 
-// Run all tests (visible + hidden) and submit
-async function runAllTestsAndSubmit() {
-    if (!currentChallenge) {
-        showResultsNotification('Challenge Loading', 'Please wait for challenge to load...', 'warning');
+// Update the hints sidebar to show revealed hints
+function updateHintsSidebar() {
+    const hintsSection = document.getElementById('hintsSection');
+    const hintsList = document.getElementById('hintsList');
+    if (!hintsSection || !hintsList) return;
+    hintsList.innerHTML = '';
+    if (!challengeHints || challengeHints.length === 0) {
+        hintsSection.style.display = 'none';
         return;
     }
-    
-    const submitBtn = document.getElementById('submitCode');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Running All Tests...';
-    
-    let allTestResults = [];
-    let visibleTestsPassed = 0;
-    let hiddenTestsPassed = 0;
-    let totalTests = 0;
-    
-    try {
-        // First run visible test cases (same as runTests)
-        testResults = []; // Clear previous results
-        totalTests = testCases.length;
-        
-        showResultsNotification('Testing Phase 1', 'Running visible test cases...', 'warning');
-        
-        for (let i = 0; i < testCases.length; i++) {
-            const testCase = testCases[i];
-            const result = await runSingleTest(testCase, i + 1);
-            testResults[i] = result;
-            allTestResults.push(result);
-            if (result.passed) visibleTestsPassed++;
-        }
-        
-        // Update UI with visible test results
-        updateActiveTestCaseButton();
-        showTestCase(currentTestCase);
-        
-        // Update test summary
-        const passedCount = document.querySelector('.passed-count');
-        const totalCount = document.querySelector('.total-count');
-        const testSummary = document.getElementById('testSummary');
-        
-        if (passedCount) passedCount.textContent = visibleTestsPassed;
-        if (totalCount) totalCount.textContent = testCases.length;
-        if (testSummary) testSummary.style.display = 'block';
-        
-        // Now run hidden test cases
-        const hiddenTests = [];
-        for (let i = 1; i <= 2; i++) {
-            const hiddenInput = currentChallenge[`hidden_test_${i}_input`];
-            const hiddenExpected = currentChallenge[`hidden_test_${i}_expected`];
-            if (hiddenInput && hiddenExpected) {
-                hiddenTests.push({
-                    input: hiddenInput,
-                    expected_output: hiddenExpected,
-                    description: `Hidden test ${i}`
-                });
-            }
-        }
-        
-        if (hiddenTests.length > 0) {
-            showResultsNotification('Testing Phase 2', `Running ${hiddenTests.length} hidden test cases...`, 'warning');
-            
-            for (let i = 0; i < hiddenTests.length; i++) {
-                const hiddenTest = hiddenTests[i];
-                const result = await runSingleTest(hiddenTest, `H${i + 1}`);
-                allTestResults.push(result);
-                if (result.passed) hiddenTestsPassed++;
-            }
-        }
-        
-        totalTests = testCases.length + hiddenTests.length;
-        const totalPassed = visibleTestsPassed + hiddenTestsPassed;
-        
-        // Show comprehensive results
-        showResultsNotification('All Tests Complete', 
-            `Results: ${visibleTestsPassed}/${testCases.length} visible, ${hiddenTestsPassed}/${hiddenTests.length} hidden tests passed`, 
-            totalPassed === totalTests ? 'success' : 'warning');
-        
-        // Update score based on test results
-        const testPassPercentage = totalTests > 0 ? totalPassed / totalTests : 0;
-        if (testPassPercentage === 1.0) {
-            // All tests passed - keep current score
-        } else if (testPassPercentage >= 0.8) {
-            score = Math.max(score - 2, 1); // Small penalty
-        } else if (testPassPercentage >= 0.6) {
-            score = Math.max(score - 4, 1); // Medium penalty
-        } else {
-            score = Math.max(score - 6, 1); // Large penalty
-        }
-        updateScore();
-        
-        // Now submit with comprehensive test results
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Submitting...';
-        
-        const response = await fetch(`${API_BASE}/submit`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                challenge_id: currentChallengeId,
-                language: currentLanguage,
-                difficulty: currentDifficulty,
-                code: editor.getValue(),
-                score: score,
-                attempts: attempts,
-                hints_used: hintsUsed,
-                elapsed_time: getElapsedTime(),
-                visible_tests_passed: visibleTestsPassed,
-                visible_tests_total: testCases.length,
-                hidden_tests_passed: hiddenTestsPassed,
-                hidden_tests_total: hiddenTests.length,
-                all_tests_passed: totalPassed,
-                all_tests_total: totalTests
-            })
-        });
-        
-        const data = await response.json();
-        
-        // Enhance submission data with test results
-        data.visible_tests_passed = visibleTestsPassed;
-        data.visible_tests_total = testCases.length;
-        data.hidden_tests_passed = hiddenTestsPassed;
-        data.hidden_tests_total = hiddenTests.length;
-        data.total_tests_passed = totalPassed;
-        data.total_tests = totalTests;
-        
-        showSubmissionModal(data);
-        
-    } catch (error) {
-        showSubmissionModal({
-            success: false,
-            error: `Error during testing/submission: ${error.message}`
-        });
+    if (revealedHints.length === 0) {
+        hintsSection.style.display = 'block';
+        hintsList.innerHTML = '<div class="hint-item hint-empty">No hints revealed yet. Click the Hint button to reveal one!</div>';
+        return;
     }
-    
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>Submit';
-}
-
-// Helper function to run a single test case
-async function runSingleTest(testCase, testNumber) {
-    try {
-        let testCode = editor.getValue() + '\n\n';
-        const functionName = extractFunctionName(editor.getValue(), currentLanguage);
-        
-        if (currentLanguage === 'python') {
-            testCode += `# Test case ${testNumber}\nresult = ${functionName}(${testCase.input})\nprint(result)`;
-        } else if (currentLanguage === 'javascript') {
-            testCode += `// Test case ${testNumber}\nconst result = ${functionName}(${testCase.input});\nconsole.log(result);`;
-        } else if (currentLanguage === 'java') {
-            const javaInput = testCase.input.replace(/\[/g, '{').replace(/\]/g, '}');
-            testCode += `\npublic static void main(String[] args) {\n    int[] testArray = ${javaInput};\n    int result = ${functionName}(testArray);\n    System.out.println(result);\n}`;
-        } else if (currentLanguage === 'cpp') {
-            const cppInput = testCase.input.replace(/\[/g, '{').replace(/\]/g, '}');
-            testCode += `\nint main() {\n    vector<int> testArray = ${cppInput};\n    int result = ${functionName}(testArray);\n    cout << result << endl;\n    return 0;\n}`;
+    hintsSection.style.display = 'block';
+    revealedHints.forEach(idx => {
+        if (challengeHints[idx]) {
+            const hintItem = document.createElement('div');
+            hintItem.className = 'hint-item';
+            hintItem.id = `hint-${idx+1}`;
+            const hintHeader = document.createElement('div');
+            hintHeader.className = 'hint-header';
+            hintHeader.innerHTML = `<span class="hint-number">Hint ${idx+1}</span>`;
+            const hintContent = document.createElement('div');
+            hintContent.className = 'hint-content';
+            hintContent.innerHTML = challengeHints[idx].replace(/\n/g, '<br>');
+            hintItem.appendChild(hintHeader);
+            hintItem.appendChild(hintContent);
+            hintsList.appendChild(hintItem);
         }
-        
-        const result = await executeCode(testCode);
-        const output = (result.run.stdout || '').trim();
-        const error = result.run.stderr || '';
-        
-        let actualOutput = output;
-        let passed = false;
-        
-        if (error) {
-            actualOutput = `Error: ${error}`;
-            passed = false;
-        } else {
-            const expected = testCase.expected_output.toString().trim();
-            passed = output === expected;
-        }
-        
-        return {
-            passed: passed,
-            actual_output: actualOutput,
-            expected_output: testCase.expected_output
-        };
-        
-    } catch (error) {
-        return {
-            passed: false,
-            actual_output: `Error: ${error.message}`,
-            expected_output: testCase.expected_output
-        };
-    }
-}
-
-// Submit code (now calls the comprehensive testing function)
-async function submitCode() {
-    await runAllTestsAndSubmit();
-}
-
-// Get elapsed time
-function getElapsedTime() {
-    return Math.floor((Date.now() - startTime) / 1000);
-}
-
-// Execute code using Piston API
-async function executeCode(code) {
-    const languageMap = {
-        'python': 'python',
-        'javascript': 'javascript',
-        'java': 'java',
-        'cpp': 'cpp'
-    };
-    
-    const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            language: languageMap[currentLanguage],
-            version: '*',
-            files: [{
-                content: code
-            }]
-        })
     });
-    
-    return await response.json();
 }
 
-// Load current challenge from database
+// Update the hint button and section display
+function updateHintsDisplay() {
+    const hintBtn = document.getElementById('hintBtn');
+    if (!challengeHints || challengeHints.length === 0) {
+        hintBtn.style.display = 'none';
+        return;
+    }
+    hintBtn.style.display = 'inline-flex';
+    const hintsLeft = challengeHints.length - revealedHints.length;
+    if (hintsLeft <= 0) {
+        hintBtn.disabled = true;
+        hintBtn.innerHTML = '<i class="fas fa-lightbulb"></i>No More Hints';
+    } else {
+        hintBtn.disabled = false;
+        hintBtn.innerHTML = `<i class="fas fa-lightbulb"></i>Hint (-2 pts) [${hintsLeft} left]`;
+    }
+}
+
+// --- CHALLENGE LOADING: fetch and store hints array, reset revealed hints ---
 async function loadCurrentChallenge() {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
     try {
         const response = await fetch(`${API_BASE}/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
         const data = await response.json();
-        
         if (data.success) {
             currentChallenge = data.challenge;
-            // Update currentDifficulty based on actual challenge data
-            if (currentChallenge.difficulty) {
-                currentDifficulty = currentChallenge.difficulty;
-            }
+            // --- HINTS: robustly fetch and store hints array ---
+            challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
+            revealedHints = [];
+            hintsUsed = 0;
             updateChallengeDisplay();
+            updateHintsSidebar(); // <-- Ensure sidebar is reset after loading
         } else {
-            throw new Error(data.error);
+            throw new Error(data.error || 'Failed to load challenge');
         }
     } catch (error) {
         console.error('Error loading challenge:', error);
-        alert('Error connecting to server. Please check if the server is running.');
+        showResultsNotification('Loading Error', `Failed to load challenge: ${error.message}`, 'error');
+    } finally {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
     }
 }
 
-// Update challenge display with loaded data
+// --- CHALLENGE DISPLAY: update sidebar and hint button on new challenge ---
 function updateChallengeDisplay() {
-    if (!currentChallenge) return;
-    
-    const challengeTitle = document.getElementById('challengeTitle');
-    if (challengeTitle) {
-        challengeTitle.textContent = currentChallenge.title;
+    if (!currentChallenge) {
+        console.error('No challenge data available');
+        return;
     }
     
-    const challengeDescription = document.getElementById('challengeDescription');
-    if (challengeDescription) {
-        challengeDescription.textContent = currentChallenge.description;
-    }
+    console.log('Updating challenge display:', currentChallenge);
     
-    const challengeProblem = document.getElementById('challengeProblem');
-    if (challengeProblem) {
-        challengeProblem.innerHTML = currentChallenge.problem_statement || currentChallenge.description;
-    }
+    // Update title and difficulty badge
+    document.getElementById('challengeTitle').textContent = currentChallenge.title;
+    document.getElementById('difficultyBadge').textContent = currentChallenge.difficulty.toUpperCase();
     
-    const challengeTips = document.getElementById('challengeTips');
-    if (challengeTips) {
-        challengeTips.innerHTML = currentChallenge.tips || 'Loading task details...';
-    }
+    // Update description
+    document.getElementById('challengeDescription').innerHTML = currentChallenge.description || '';
     
-    const difficultyBadge = document.getElementById('difficultyBadge');
-    if (difficultyBadge) {
-        difficultyBadge.textContent = currentChallenge.difficulty?.toUpperCase() || 'BASIC';
-    }
+    // Update problem statement with proper newline handling
+    const problemStatement = currentChallenge.problem_statement || '';
+    const formattedProblem = problemStatement.replace(/\n/g, '<br>');
+    document.getElementById('challengeProblem').innerHTML = formattedProblem;
     
-    // Apply theme based on difficulty
-    applyTheme(currentChallenge.difficulty || 'basic');
-    
-    if (editor && currentChallenge.buggy_code) {
+    // Update code editor with buggy code
+    if (currentChallenge.buggy_code) {
         editor.setValue(currentChallenge.buggy_code);
     }
     
+    // Update test cases
     updateTestCasesDisplay();
+    
+    // Update hints display
     updateHintsDisplay();
+    
+    // Apply theme based on difficulty
+    applyTheme(currentChallenge.difficulty);
+    
+    // Clear hints list when loading a new challenge
+    const hintsList = document.getElementById('hintsList');
+    if (hintsList) {
+        hintsList.innerHTML = '';
+        console.log('Cleared hints list');
+    }
+    // Ensure hints sidebar is reset and shown appropriately
+    updateHintsSidebar();
 }
 
 // Update test cases display
@@ -886,16 +626,6 @@ function updateTestCasesDisplay() {
     }
 }
 
-// Update hints display
-function updateHintsDisplay() {
-    const hintBtn = document.getElementById('hintBtn');
-    if (currentChallenge && currentChallenge.hint_1) {
-        hintBtn.style.display = 'inline-flex';
-    } else {
-        hintBtn.style.display = 'none';
-    }
-}
-
 // Load random challenge
 async function loadRandomChallenge() {
     const randomBtn = document.getElementById('loadRandomBtn');
@@ -931,6 +661,9 @@ async function loadRandomChallenge() {
             wrongSubmissions = 0;
             attempts = 0;
             startTime = Date.now();
+            // --- HINTS: robustly fetch and store hints array ---
+            challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
+            revealedHints = [];
             updateScore();
             
             updateChallengeDisplay();
@@ -1000,4 +733,4 @@ function extractFunctionName(code, language) {
         default:
             return 'main_function';
     }
-} 
+}
