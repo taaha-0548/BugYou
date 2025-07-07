@@ -9,7 +9,6 @@ import requests
 from datetime import datetime
 import os
 import re
-import random
 import time
 from functools import wraps
 import json
@@ -23,12 +22,11 @@ from database_config import (
     get_user_by_username,
     create_user,
     test_connection,
-    get_all_available_challenges,
     CHALLENGE_TABLES
 )
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend communication
+app = Flask(__name__, static_folder='../frontend')
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for API endpoints
 
 # Configuration
 PISTON_API = 'https://emkc.org/api/v2/piston'
@@ -150,12 +148,12 @@ def clear_cache():
 @app.route('/')
 def serve_frontend():
     """Serve the main frontend page"""
-    return send_from_directory('../frontend', 'index.html')
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
     """Serve static files (CSS, JS, etc.)"""
-    return send_from_directory('../frontend', filename)
+    return send_from_directory(app.static_folder, filename)
 
 # ================================
 # API ENDPOINTS
@@ -205,43 +203,85 @@ def get_challenges_by_lang_diff(language, difficulty):
         return jsonify({
             'success': True,
             'challenges': challenges,
-            'language': language,
-            'difficulty': difficulty,
+            'count': len(challenges),
             'response_time': f'{response_time:.3f}s'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/challenge/<language>/<difficulty>/<int:challenge_id>')
-def get_challenge_details(language, difficulty, challenge_id):
-    """Get detailed challenge information including test cases and hints"""
-    start_time = time.time()
+@app.route('/api/challenge/<language>/<difficulty>/first')
+@cache_result(timeout=60)  # Cache for 1 minute
+def get_first_challenge(language, difficulty):
+    """Get the first available challenge for a language and difficulty"""
     try:
-        challenge = get_challenge_by_id(language, difficulty, challenge_id)
-        response_time = time.time() - start_time
-        if challenge:
-            challenge_data = dict(challenge)
-            challenge_data['difficulty'] = difficulty
-            challenge_data['language'] = language
-            # Ensure 'hints' field is present and is a list
-            hints = challenge_data.get('hints', [])
-            if isinstance(hints, str):
-                import json
-                try:
-                    hints = json.loads(hints)
-                except Exception:
-                    hints = []
-            if not isinstance(hints, list):
-                hints = []
-            challenge_data['hints'] = hints
+        print(f"Loading first challenge for {language} - {difficulty}")
+        # Get all challenges for this language and difficulty
+        challenges = get_challenges_by_language_difficulty(language, difficulty)
+        
+        if not challenges:
+            print(f"No challenges found for {language} - {difficulty}")
+            return jsonify({
+                'success': False,
+                'error': f'No challenges available for {language} - {difficulty}'
+            }), 404
+            
+        # Get the first challenge
+        first_challenge = challenges[0]
+        challenge_id = first_challenge['challenge_id']
+        print(f"Found first challenge: {challenge_id}")
+        
+        # Get full challenge details
+        full_challenge = get_challenge_by_id(language, difficulty, challenge_id)
+        
+        if full_challenge:
+            print(f"Successfully loaded challenge details for {challenge_id}")
             return jsonify({
                 'success': True,
-                'challenge': challenge_data,
-                'response_time': f'{response_time:.3f}s'
+                'challenge': full_challenge
             })
         else:
-            return jsonify({'success': False, 'error': 'Challenge not found'}), 404
+            print(f"Failed to load challenge details for {challenge_id}")
+            return jsonify({
+                'success': False,
+                'error': 'Challenge details not found'
+            }), 404
+            
+    except ValueError as e:
+        print(f"Invalid language/difficulty: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Invalid language or difficulty: {str(e)}'
+        }), 400
     except Exception as e:
+        print(f"Error loading first challenge: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/challenge/<language>/<difficulty>/<int:challenge_id>')
+def get_challenge_details(language, difficulty, challenge_id):
+    """Get details for a specific challenge"""
+    try:
+        print(f"Loading challenge {challenge_id} for {language} - {difficulty}")
+        challenge = get_challenge_by_id(language, difficulty, challenge_id)
+        if challenge:
+            print(f"Successfully loaded challenge {challenge_id}")
+            return jsonify({
+                'success': True,
+                'challenge': challenge
+            })
+        else:
+            print(f"Challenge {challenge_id} not found")
+            return jsonify({
+                'success': False,
+                'error': 'Challenge not found'
+            }), 404
+    except ValueError as e:
+        print(f"Invalid language/difficulty: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Invalid language or difficulty: {str(e)}'
+        }), 400
+    except Exception as e:
+        print(f"Error loading challenge {challenge_id}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def get_cache_key(code, language, test_cases):
@@ -733,63 +773,6 @@ def get_user_info(username):
             'success': True,
             'user': user
         })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/challenge/random', methods=['GET'])
-@app.route('/api/challenge/random/<language>', methods=['GET'])
-def get_random_challenge(language=None):
-    """Get a random challenge, optionally filtered by language, always include hints"""
-    try:
-        # Get all challenges
-        all_challenges = get_all_available_challenges()
-        if not all_challenges:
-            return jsonify({'success': False, 'error': 'No challenges available'}), 404
-            
-        # Filter by language if specified
-        if language:
-            filtered_challenges = [c for c in all_challenges if c['language'] == language]
-            if not filtered_challenges:
-                return jsonify({'success': False, 'error': f'No challenges available for {language}'}), 404
-            challenges = filtered_challenges
-        else:
-            challenges = all_challenges
-            
-        # Select random challenge
-        challenge = random.choice(challenges)
-        
-        # Get full challenge details
-        full_challenge = get_challenge_by_id(
-            challenge['language'],
-            challenge['difficulty'],
-            challenge['challenge_id']
-        )
-        
-        if full_challenge:
-            challenge_data = dict(full_challenge)
-            challenge_data['difficulty'] = challenge['difficulty']
-            challenge_data['language'] = challenge['language']
-            hints = challenge_data.get('hints', [])
-            if isinstance(hints, str):
-                import json
-                try:
-                    hints = json.loads(hints)
-                except Exception:
-                    hints = []
-            if not isinstance(hints, list):
-                hints = []
-            challenge_data['hints'] = hints
-            return jsonify({
-                'success': True,
-                'challenge': challenge_data,
-                'random_info': {
-                    'language': challenge['language'],
-                    'difficulty': challenge['difficulty'],
-                    'challenge_id': challenge['challenge_id']
-                }
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Challenge details not found'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
