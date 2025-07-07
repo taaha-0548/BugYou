@@ -96,6 +96,201 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Failed to initialize:', error);
         showResultsNotification('Initialization Error', 'Failed to load initial challenge. Please refresh the page.', 'error');
     }
+
+    // Add Challenge Form Functionality
+    const challengeForm = document.getElementById('challengeForm');
+    if (!challengeForm) return; // Only run on add challenge page
+
+    // Test case template
+    const testCaseTemplate = (index) => `
+        <div class="test-case-group" id="testCase${index}">
+            <div class="test-case-header">Test Case ${index}</div>
+            <div class="test-case-row">
+                <div class="form-group">
+                    <label>Input</label>
+                    <input type="text" name="testCase${index}Input" required placeholder="e.g., [1, 2, 3]">
+                </div>
+                <div class="form-group">
+                    <label>Expected Output</label>
+                    <input type="text" name="testCase${index}Expected" required placeholder="e.g., 6">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="testCase${index}Description" placeholder="e.g., Basic test case">
+                </div>
+                <div class="form-group">
+                    <label>Weight</label>
+                    <input type="number" name="testCase${index}Weight" value="1" min="1" max="5">
+                </div>
+            </div>
+            ${index > 3 ? `<button type="button" class="btn btn-secondary remove-test-case" data-index="${index}">
+                <i class="fas fa-trash"></i> Remove
+            </button>` : ''}
+        </div>
+    `;
+
+    // Add initial test cases
+    const testCasesContainer = document.getElementById('testCases');
+    for (let i = 1; i <= 3; i++) {
+        testCasesContainer.insertAdjacentHTML('beforeend', testCaseTemplate(i));
+    }
+
+    // Add test case button
+    document.getElementById('addTestCase').addEventListener('click', function() {
+        const testCases = document.querySelectorAll('.test-case-group');
+        const newIndex = testCases.length + 1;
+        testCasesContainer.insertAdjacentHTML('beforeend', testCaseTemplate(newIndex));
+    });
+
+    // Remove test case
+    testCasesContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-test-case')) {
+            const testCase = e.target.closest('.test-case-group');
+            testCase.remove();
+        }
+    });
+
+    // Language template code
+    const codeTemplates = {
+        python: `def function_name(parameter):
+    # Bug: Add your buggy code here
+    pass`,
+        javascript: `function functionName(parameter) {
+    // Bug: Add your buggy code here
+    return null;
+}`,
+        java: `public class ClassName {
+    public static int functionName(int[] parameter) {
+        // Bug: Add your buggy code here
+        return 0;
+    }
+}`,
+        cpp: `#include <iostream>
+#include <vector>
+using namespace std;
+
+int functionName(vector<int> parameter) {
+    // Bug: Add your buggy code here
+    return 0;
+}`
+    };
+
+    // Auto-generate code template on language change
+    document.getElementById('language').addEventListener('change', function(e) {
+        const language = e.target.value;
+        const codeTextarea = document.getElementById('buggyCode');
+        
+        if (language && !codeTextarea.value.trim()) {
+            codeTextarea.value = codeTemplates[language] || '';
+        }
+    });
+
+    // Form submission
+    challengeForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Validate required fields
+        const requiredFields = ['language', 'difficulty', 'title', 'description', 'buggyCode', 'solution'];
+        const missingFields = requiredFields.filter(field => !data[field]?.trim());
+        
+        if (missingFields.length > 0) {
+            showError(`Please fill in all required fields: ${missingFields.join(', ')}`);
+            return;
+        }
+
+        // Validate test cases
+        const testCases = [];
+        let testCaseIndex = 1;
+        while (data[`testCase${testCaseIndex}Input`]) {
+            testCases.push({
+                input: data[`testCase${testCaseIndex}Input`],
+                expected: data[`testCase${testCaseIndex}Expected`],
+                description: data[`testCase${testCaseIndex}Description`] || '',
+                weight: parseInt(data[`testCase${testCaseIndex}Weight`]) || 1
+            });
+            testCaseIndex++;
+        }
+
+        if (testCases.length < 3) {
+            showError('Please add at least 3 test cases');
+            return;
+        }
+
+        // Process hints
+        const hints = data.hints.split('\n').filter(hint => hint.trim());
+
+        // Prepare challenge data
+        const challengeData = {
+            language: data.language,
+            difficulty: data.difficulty,
+            title: data.title,
+            description: data.description,
+            buggy_code: data.buggyCode,
+            solution: data.solution,
+            test_cases: testCases,
+            hints: hints
+        };
+
+        try {
+            showLoading(true);
+            const response = await fetch('/api/challenges', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(challengeData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showSuccess('Challenge added successfully!');
+                challengeForm.reset();
+                // Reset test cases
+                testCasesContainer.innerHTML = '';
+                for (let i = 1; i <= 3; i++) {
+                    testCasesContainer.insertAdjacentHTML('beforeend', testCaseTemplate(i));
+                }
+            } else {
+                throw new Error(result.message || 'Failed to add challenge');
+            }
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            showLoading(false);
+        }
+    });
+
+    // Helper functions
+    function showSuccess(message) {
+        const successMsg = document.getElementById('successMessage');
+        successMsg.textContent = message;
+        successMsg.style.display = 'block';
+        document.getElementById('errorMessage').style.display = 'none';
+        window.scrollTo(0, 0);
+    }
+
+    function showError(message) {
+        const errorMsg = document.getElementById('errorMessage');
+        errorMsg.textContent = message;
+        errorMsg.style.display = 'block';
+        document.getElementById('successMessage').style.display = 'none';
+        window.scrollTo(0, 0);
+    }
+
+    function showLoading(show) {
+        const submitBtn = challengeForm.querySelector('button[type="submit"]');
+        if (show) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding Challenge...';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Challenge';
+        }
+    }
 });
 
 // Initialize CodeMirror editor
@@ -309,6 +504,29 @@ function initEventListeners() {
         }, 300);
         randomBtn.addEventListener('click', debouncedRandom);
     }
+
+    // Problems button click
+    const problemsBtn = document.getElementById('problemsBtn');
+    if (problemsBtn) {
+        problemsBtn.addEventListener('click', showProblemsModal);
+    }
+    
+    // Problems modal close button
+    const problemsModalClose = document.getElementById('problemsModalClose');
+    if (problemsModalClose) {
+        problemsModalClose.addEventListener('click', hideProblemsModal);
+    }
+    
+    // Difficulty tabs
+    const difficultyTabs = document.querySelectorAll('.difficulty-tab');
+    difficultyTabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            difficultyTabs.forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            currentDifficulty = e.target.dataset.difficulty;
+            loadProblemsForDifficulty(currentDifficulty);
+        });
+    });
 }
 
 // Initialize UI handlers for modals and notifications
@@ -529,35 +747,6 @@ function hideSubmissionModal() {
     submissionModal.classList.remove('show');
 }
 
-// Show random challenge modal
-function showRandomChallengeModal(language, difficulty, title) {
-    const modal = document.getElementById('randomChallengeModal');
-    const languageElement = document.getElementById('randomLanguage');
-    const difficultyElement = document.getElementById('randomDifficulty');
-    const titleElement = document.getElementById('randomTitle');
-    const messageElement = document.getElementById('randomChallengeMessage');
-    
-    if (languageElement) languageElement.textContent = language;
-    if (difficultyElement) difficultyElement.textContent = difficulty;
-    if (titleElement) titleElement.textContent = title;
-    if (messageElement) {
-        messageElement.textContent = `Your random ${difficulty} challenge in ${language} has been loaded! Good luck fixing the bug!`;
-    }
-    
-    modal.classList.add('show');
-}
-
-function hideRandomChallengeModal() {
-    const randomChallengeModal = document.getElementById('randomChallengeModal');
-    randomChallengeModal.classList.remove('show');
-}
-
-function formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
 // Apply theme based on difficulty level
 function applyTheme(difficulty) {
     const body = document.body;
@@ -700,6 +889,9 @@ function updateHintsDisplay() {
 
 // Update score display
 function updateScore() {
+    // Ensure score stays between 0 and 10
+    score = Math.max(0, Math.min(10, score));
+    
     const scoreElements = [
         document.getElementById('score'),
         document.getElementById('scoreValue'),
@@ -708,7 +900,12 @@ function updateScore() {
     
     scoreElements.forEach(element => {
         if (element) {
-            element.textContent = `${score}/10`;
+            // Only append /10 if it's not the scoreValue element
+            if (element.id === 'scoreValue') {
+                element.textContent = score;
+            } else {
+                element.textContent = `${score}/10`;
+            }
         }
     });
 }
@@ -983,128 +1180,6 @@ function updateTestCasesDisplay() {
     }
 }
 
-// Update loadRandomChallenge to properly handle test cases and score
-async function loadRandomChallenge() {
-    const randomBtn = document.getElementById('loadRandomBtn');
-    const originalText = randomBtn.innerHTML;
-    
-    randomBtn.disabled = true;
-    randomBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Loading...';
-    
-    try {
-        const response = await fetch(getApiUrl(`/challenge/random/${currentLanguage}`));
-        const data = await response.json();
-        
-        if (data.success) {
-            const randomInfo = data.random_info;
-            
-            currentLanguage = randomInfo.language;
-            currentDifficulty = randomInfo.difficulty;
-            currentChallengeId = randomInfo.challenge_id;
-            currentChallenge = data.challenge;
-            
-            // Extract test cases from challenge data
-            testCases = currentChallenge.test_cases || [];
-            testResults = [];
-            
-            // Update language selector
-            const langSelect = document.getElementById('language');
-            if (langSelect) {
-                langSelect.value = currentLanguage;
-            }
-            
-            // Update editor mode
-            let mode = currentLanguage;
-            if (currentLanguage === 'java') {
-                mode = 'text/x-java';
-            } else if (currentLanguage === 'cpp') {
-                mode = 'text/x-c++src';
-            }
-            editor.setOption('mode', mode);
-            
-            // Reset state
-            score = 10;
-            hintsUsed = 0;
-            wrongSubmissions = 0;
-            attempts = 0;
-            startTime = Date.now();
-            
-            // Update hints
-            challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
-            revealedHints = [];
-            
-            // Update display
-            updateChallengeDisplay();
-            updateScore();
-            updateHintsDisplay();
-            
-            // Show the random challenge modal
-            showRandomChallengeModal(currentLanguage, currentDifficulty, currentChallenge.title);
-            
-        } else {
-            throw new Error(data.error || 'Failed to load random challenge');
-        }
-        
-    } catch (error) {
-        console.error('Random challenge loading error:', error);
-        showResultsNotification('Loading Failed', `Failed to load random challenge: ${error.message}`, 'error');
-    } finally {
-        randomBtn.disabled = false;
-        randomBtn.innerHTML = originalText;
-    }
-}
-
-// Change programming language
-function changeLanguage(event) {
-    currentLanguage = event.target.value;
-    
-    let mode = currentLanguage;
-    if (currentLanguage === 'java') {
-        mode = 'text/x-java';
-    } else if (currentLanguage === 'cpp') {
-        mode = 'text/x-c++src';
-    }
-    editor.setOption('mode', mode);
-    
-    score = 10;
-    hintsUsed = 0;
-    wrongSubmissions = 0;
-    attempts = 0;
-    startTime = Date.now();
-    updateScore();
-    
-    loadCurrentChallenge();
-}
-
-// Extract function name from code
-function extractFunctionName(code, language) {
-    let match;
-    
-    switch (language) {
-        case 'python':
-            match = code.match(/def\s+(\w+)\s*\(/);
-            return match ? match[1] : 'main_function';
-            
-        case 'javascript':
-            match = code.match(/function\s+(\w+)\s*\(/) || code.match(/const\s+(\w+)\s*=/) || code.match(/let\s+(\w+)\s*=/);
-            return match ? match[1] : 'main_function';
-            
-        case 'java':
-            match = code.match(/public\s+static\s+\w+\s+(\w+)\s*\(/);
-            return match ? match[1] : 'main_function';
-            
-        case 'cpp':
-            match = code.match(/\w+\s+(\w+)\s*\([^)]*\)\s*{/) || code.match(/(\w+)\s*\([^)]*\)\s*{/);
-            if (match && !['main', 'int', 'void', 'string', 'using', 'include'].includes(match[1])) {
-                return match[1];
-            }
-            return 'calculateSum';
-            
-        default:
-            return 'main_function';
-    }
-}
-
 // Run tests for current challenge
 async function runTests() {
     // Get button first and store original state
@@ -1250,4 +1325,114 @@ function updateTestResults() {
 // Get elapsed time in seconds
 function getElapsedTime() {
     return Math.floor((Date.now() - startTime) / 1000);
+}
+
+// Change programming language
+function changeLanguage(event) {
+    currentLanguage = event.target.value;
+    
+    let mode = currentLanguage;
+    if (currentLanguage === 'java') {
+        mode = 'text/x-java';
+    } else if (currentLanguage === 'cpp') {
+        mode = 'text/x-c++src';
+    }
+    editor.setOption('mode', mode);
+    
+    score = 10;
+    hintsUsed = 0;
+    wrongSubmissions = 0;
+    attempts = 0;
+    startTime = Date.now();
+    updateScore();
+    
+    loadCurrentChallenge();
+}
+
+// Extract function name from code
+function extractFunctionName(code, language) {
+    let match;
+    
+    switch (language) {
+        case 'python':
+            match = code.match(/def\s+(\w+)\s*\(/);
+            return match ? match[1] : 'main_function';
+            
+        case 'javascript':
+            match = code.match(/function\s+(\w+)\s*\(/) || code.match(/const\s+(\w+)\s*=/) || code.match(/let\s+(\w+)\s*=/);
+            return match ? match[1] : 'main_function';
+            
+        case 'java':
+            match = code.match(/public\s+static\s+\w+\s+(\w+)\s*\(/);
+            return match ? match[1] : 'main_function';
+            
+        case 'cpp':
+            match = code.match(/\w+\s+(\w+)\s*\([^)]*\)\s*{/) || code.match(/(\w+)\s*\([^)]*\)\s*{/);
+            if (match && !['main', 'int', 'void', 'string', 'using', 'include'].includes(match[1])) {
+                return match[1];
+            }
+            return 'calculateSum';
+            
+        default:
+            return 'main_function';
+    }
+}
+
+// Problems list functionality
+function showProblemsModal() {
+    const modal = document.getElementById('problemsModal');
+    modal.classList.add('show');
+    loadProblemsForDifficulty(currentDifficulty);
+}
+
+function hideProblemsModal() {
+    const modal = document.getElementById('problemsModal');
+    modal.classList.remove('show');
+}
+
+async function loadProblemsForDifficulty(difficulty) {
+    const problemsList = document.getElementById('problemsList');
+    problemsList.innerHTML = '<div class="loading-message">Loading problems...</div>';
+    
+    try {
+        const response = await fetch(getApiUrl(`/challenges/${currentLanguage}/${difficulty}`));
+        const data = await response.json();
+        
+        if (data.success) {
+            problemsList.innerHTML = '';
+            data.challenges.forEach(challenge => {
+                const problemItem = document.createElement('div');
+                problemItem.className = 'problem-item';
+                problemItem.innerHTML = `
+                    <div class="problem-info">
+                        <div class="problem-title">${challenge.title}</div>
+                        <div class="problem-stats">
+                            <span class="problem-stat">
+                                <i class="fas fa-star"></i>
+                                ${challenge.max_score} points
+                            </span>
+                            <span class="problem-stat">
+                                <i class="fas fa-check-circle"></i>
+                                ${Math.round(challenge.success_rate * 100)}% success rate
+                            </span>
+                        </div>
+                    </div>
+                `;
+                
+                problemItem.addEventListener('click', () => {
+                    currentChallengeId = challenge.challenge_id;
+                    currentDifficulty = difficulty;
+                    hideProblemsModal();
+                    loadCurrentChallenge();
+                });
+                
+                problemsList.appendChild(problemItem);
+            });
+        } else {
+            problemsList.innerHTML = '<div class="error-message">Failed to load problems</div>';
+        }
+    } catch (error) {
+        console.error('Error loading problems:', error);
+        problemsList.innerHTML = '<div class="error-message">Error loading problems</div>';
+    }
 }

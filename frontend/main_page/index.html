@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="styles.css?v=8.7">
+    <link rel="stylesheet" href="./styles.css?v=8.7">
 </head>
 <body>
     <div class="app-container">
@@ -28,9 +28,9 @@
             </div>
             <div class="header-right">
                 <div class="nav-actions">
-                    <button class="btn btn-secondary" id="loadRandomBtn">
-                        <i class="fas fa-random"></i>
-                        Random
+                    <button class="btn btn-secondary" id="problemsBtn">
+                        <i class="fas fa-list"></i>
+                        Problems
                     </button>
                     <button class="btn btn-secondary" id="hintBtn">
                         <i class="fas fa-lightbulb"></i>
@@ -56,7 +56,7 @@
                 <div class="score-info">
                     <span class="score">
                         <i class="fas fa-star"></i>
-                        Score: <strong id="scoreValue">10</strong>/10
+                        Score: <strong id="scoreValue">4</strong>
                     </span>
                     <span class="timer" id="timer">0:00</span>
                 </div>
@@ -364,6 +364,31 @@
         </div>
     </div>
 
+    <!-- Problems List Modal -->
+    <div class="modal-overlay" id="problemsModal">
+        <div class="modal-content problems-modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-list"></i>
+                    Available Problems
+                </div>
+                <button class="modal-close" id="problemsModalClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="difficulty-tabs">
+                    <button class="difficulty-tab active" data-difficulty="basic">Basic</button>
+                    <button class="difficulty-tab" data-difficulty="intermediate">Intermediate</button>
+                    <button class="difficulty-tab" data-difficulty="advanced">Advanced</button>
+                </div>
+                <div class="problems-list" id="problemsList">
+                    <!-- Problems will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- CodeMirror JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
@@ -371,6 +396,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
     
     <!-- Custom JS -->
-    <script src="script.js?v=8.6"></script>
+    <script src="./script.js?v=8.7"></script>
 </body>
 </html>
