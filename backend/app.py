@@ -25,8 +25,19 @@ from database_config import (
     CHALLENGE_TABLES
 )
 
-app = Flask(__name__, static_folder='../frontend')
+# Initialize Flask app with multiple static folders
+app = Flask(__name__)
+app.static_folder = '../frontend/main_page'  # Primary static folder
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for API endpoints
+
+# Additional static folders
+STATIC_FOLDERS = {
+    'main': '../frontend/main_page',
+    'login': '../frontend/login',
+    'signup': '../frontend/signup',
+    'admin': '../frontend/admin',
+    'assets': '../Assets'  # Assets directory
+}
 
 # Configuration
 PISTON_API = 'https://emkc.org/api/v2/piston'
@@ -148,12 +159,49 @@ def clear_cache():
 @app.route('/')
 def serve_frontend():
     """Serve the main frontend page"""
-    return send_from_directory(app.static_folder, 'index.html')
+    return send_from_directory(STATIC_FOLDERS['main'], 'index.html')
+
+@app.route('/login')
+def serve_login():
+    """Serve the login page"""
+    return send_from_directory(STATIC_FOLDERS['login'], 'login.html')
+
+@app.route('/signup')
+def serve_signup():
+    """Serve the signup page"""
+    return send_from_directory(STATIC_FOLDERS['signup'], 'signup.html')
+
+@app.route('/admin')
+def serve_admin():
+    """Serve the admin page"""
+    return send_from_directory(STATIC_FOLDERS['admin'], 'admin.html')
+
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    """Serve files from Assets directory"""
+    try:
+        return send_from_directory('../Assets', filename)
+    except Exception as e:
+        print(f"Error serving asset {filename}: {str(e)}")
+        return f"Asset {filename} not found", 404
 
 @app.route('/<path:filename>')
 def serve_static(filename):
     """Serve static files (CSS, JS, etc.)"""
-    return send_from_directory(app.static_folder, filename)
+    # First try to serve from the current page's directory
+    current_page = request.path.split('/')[1]  # Get the first part of the path
+    if current_page in ['login', 'signup', 'admin']:
+        folder = STATIC_FOLDERS[current_page]
+        if os.path.exists(os.path.join(folder, filename)):
+            return send_from_directory(folder, filename)
+    
+    # Then try other static folders
+    for folder_name, folder_path in STATIC_FOLDERS.items():
+        if os.path.exists(os.path.join(folder_path, filename)):
+            return send_from_directory(folder_path, filename)
+    
+    # If file not found in any directory, return 404
+    return f"File {filename} not found", 404
 
 # ================================
 # API ENDPOINTS
@@ -775,6 +823,63 @@ def get_user_info(username):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/challenges', methods=['POST'])
+def add_challenge():
+    """Add a new challenge"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'solution', 'test_cases']
+        missing_fields = [field for field in required_fields if field not in data or not data[field]]
+        
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+
+        # Validate test cases
+        if len(data['test_cases']) < 3:
+            return jsonify({
+                'success': False,
+                'error': 'At least 3 test cases are required'
+            }), 400
+
+        # Validate language
+        if data['language'] not in PISTON_LANGUAGES:
+            return jsonify({
+                'success': False,
+                'error': f'Unsupported language. Must be one of: {", ".join(PISTON_LANGUAGES.keys())}'
+            }), 400
+
+        # Validate difficulty
+        valid_difficulties = ['basic', 'intermediate', 'advanced']
+        if data['difficulty'].lower() not in valid_difficulties:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid difficulty. Must be one of: {", ".join(valid_difficulties)}'
+            }), 400
+
+        # TODO: Add the challenge to the database
+        # This will be implemented when we add the database function
+        
+        return jsonify({
+            'success': True,
+            'message': 'Challenge added successfully',
+            'data': {
+                'title': data['title'],
+                'language': data['language'],
+                'difficulty': data['difficulty']
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     print("🔌 Testing database connection...")
