@@ -1,72 +1,68 @@
 #!/usr/bin/env python3
 """
-Fix newline characters in database
-Replace literal '\n' strings with actual line breaks in problem statements and other text fields
+Script to fix file encodings and line endings
 """
 
-import psycopg2
-from database_config import DATABASE_CONFIG, CHALLENGE_TABLES
+import os
+import sys
+import codecs
 
-def fix_newlines_in_table(table_name):
-    """Fix newline characters in a specific table"""
-    conn = psycopg2.connect(**DATABASE_CONFIG)
-    cursor = conn.cursor()
+def fix_file_encoding(filepath):
+    """Convert a file to UTF-8 encoding"""
+    print(f"Processing {filepath}...")
     
+    # Try different encodings
+    encodings = ['utf-16le', 'utf-16be', 'utf-8']
+    content = None
+    
+    for encoding in encodings:
+        try:
+            with open(filepath, 'rb') as f:
+                raw = f.read()
+                # Check for BOM
+                if raw.startswith(codecs.BOM_UTF16_LE):
+                    encoding = 'utf-16le'
+                elif raw.startswith(codecs.BOM_UTF16_BE):
+                    encoding = 'utf-16be'
+                elif raw.startswith(codecs.BOM_UTF8):
+                    encoding = 'utf-8'
+                
+                content = raw.decode(encoding)
+                print(f"Successfully read file as {encoding}")
+                break
+        except UnicodeDecodeError:
+            continue
+    
+    if content is None:
+        print("Error: Could not determine file encoding")
+        return False
+    
+    # Write back as UTF-8
     try:
-        # Get all records from the table
-        cursor.execute(f"SELECT challenge_id, problem_statement, buggy_code, reference_solution, solution_explanation, hint_1, hint_2, hint_3 FROM {table_name}")
-        records = cursor.fetchall()
-        
-        print(f"Processing {len(records)} records in {table_name}...")
-        
-        for record in records:
-            challenge_id, problem_statement, buggy_code, reference_solution, solution_explanation, hint_1, hint_2, hint_3 = record
-            
-            # Fix newlines in each field
-            if problem_statement:
-                problem_statement = problem_statement.replace('\\n', '\n')
-            if buggy_code:
-                buggy_code = buggy_code.replace('\\n', '\n')
-            if reference_solution:
-                reference_solution = reference_solution.replace('\\n', '\n')
-            if solution_explanation:
-                solution_explanation = solution_explanation.replace('\\n', '\n')
-            if hint_1:
-                hint_1 = hint_1.replace('\\n', '\n')
-            if hint_2:
-                hint_2 = hint_2.replace('\\n', '\n')
-            if hint_3:
-                hint_3 = hint_3.replace('\\n', '\n')
-            
-            # Update the record
-            cursor.execute(f"""
-                UPDATE {table_name} 
-                SET problem_statement = %s, buggy_code = %s, reference_solution = %s, 
-                    solution_explanation = %s, hint_1 = %s, hint_2 = %s, hint_3 = %s
-                WHERE challenge_id = %s
-            """, (problem_statement, buggy_code, reference_solution, solution_explanation, 
-                  hint_1, hint_2, hint_3, challenge_id))
-        
-        conn.commit()
-        print(f"✅ Fixed newlines in {table_name}")
-        
+        with open(filepath, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(content)
+        print("Successfully converted to UTF-8")
+        return True
     except Exception as e:
-        print(f"❌ Error processing {table_name}: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+        print(f"Error writing file: {e}")
+        return False
 
 def main():
-    """Fix newlines in all challenge tables"""
-    print("🔧 Fixing newline characters in database...")
+    if len(sys.argv) < 2:
+        print("Usage: python fix_newlines.py <file>")
+        sys.exit(1)
     
-    for language, difficulties in CHALLENGE_TABLES.items():
-        for difficulty, table_name in difficulties.items():
-            print(f"\nProcessing {language} {difficulty}...")
-            fix_newlines_in_table(table_name)
+    filepath = sys.argv[1]
+    if not os.path.exists(filepath):
+        print(f"Error: File {filepath} not found")
+        sys.exit(1)
     
-    print("\n✅ All newline fixes completed!")
+    success = fix_file_encoding(filepath)
+    if success:
+        print("File converted successfully")
+    else:
+        print("Failed to convert file")
+        sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 

@@ -1,4 +1,5 @@
 // BugYou Debugging Interface JavaScript
+console.log('JS loaded 🎉');  // Test log to verify script loading
 
 // Configuration
 const API_BASE = 'http://localhost:5000/api';  // Flask backend
@@ -23,8 +24,61 @@ let testResults = [];
 let challengeHints = []; // Array of hints for the current challenge
 let revealedHints = [];  // Indices of revealed hints (reset on new challenge)
 
+// Cache for API responses
+const apiCache = new Map();
+const API_CACHE_DURATION = 5000; // 5 seconds
+
+// Add cache busting parameter to API calls
+function getApiUrl(endpoint) {
+    const timestamp = new Date().getTime();
+    return `${API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}_=${timestamp}`;
+}
+
+// Optimized API call function with caching
+async function fetchWithCache(endpoint, options = {}) {
+    const cacheKey = endpoint + JSON.stringify(options);
+    const now = Date.now();
+    
+    // Check cache first
+    if (apiCache.has(cacheKey)) {
+        const cached = apiCache.get(cacheKey);
+        if (now - cached.timestamp < API_CACHE_DURATION) {
+            return cached.data;
+        }
+        apiCache.delete(cacheKey);
+    }
+    
+    // Make API call
+    const response = await fetch(getApiUrl(endpoint), options);
+    const data = await response.json();
+    
+    // Cache the response
+    if (response.ok && !endpoint.includes('/execute') && !endpoint.includes('/validate')) {
+        apiCache.set(cacheKey, {
+            timestamp: now,
+            data: data
+        });
+    }
+    
+    return data;
+}
+
+// Debounce function to prevent rapid button clicks
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Initialize application when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Initialize UI components first
     initEditor();
     initTimer();
     initTestCaseNavigation();
@@ -34,7 +88,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Apply default theme
     applyTheme('basic');
     
-    loadCurrentChallenge();
+    // Clear backend cache and load challenge
+    try {
+        await fetch(getApiUrl('/cache/clear'));
+        await loadCurrentChallenge();
+    } catch (error) {
+        console.error('Failed to initialize:', error);
+        showResultsNotification('Initialization Error', 'Failed to load initial challenge. Please refresh the page.', 'error');
+    }
 });
 
 // Initialize CodeMirror editor
@@ -69,8 +130,19 @@ function initTimer() {
 
 // Initialize test case navigation functionality
 function initTestCaseNavigation() {
-    const testCaseButtons = document.querySelectorAll('.test-case-btn');
-    testCaseButtons.forEach((btn, index) => {
+    const testCaseButtons = document.getElementById('testCaseButtons');
+    if (!testCaseButtons) return;
+
+    // Remove old event listeners
+    const oldButtons = testCaseButtons.querySelectorAll('.test-case-btn');
+    oldButtons.forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    // Add new event listeners
+    const buttons = testCaseButtons.querySelectorAll('.test-case-btn');
+    buttons.forEach((btn, index) => {
         btn.addEventListener('click', () => {
             currentTestCase = index;
             showTestCase(index);
@@ -91,6 +163,9 @@ function updateActiveTestCaseButton() {
             btn.classList.add(testResults[index].passed ? 'passed' : 'failed');
         }
     });
+
+    // Update test case display
+    showTestCase(currentTestCase);
 }
 
 // Helper to get test panel elements by context
@@ -124,36 +199,116 @@ function showTestCase(index, context = 'main') {
     } = getTestPanelElements(context);
     
     if (testCases[index]) {
-        // Display input and expected output
-        testInputDisplay.innerHTML = `<pre>${testCases[index].input}</pre>`;
-        testExpectedDisplay.innerHTML = `<pre>${testCases[index].expected_output}</pre>`;
+        const testCase = testCases[index];
+        // Always preserve input and expected output
+        testInputDisplay.innerHTML = `<pre>${testCase.input}</pre>`;
+        // Handle both expected_output and expected fields for backward compatibility
+        const expectedOutput = testCase.expected_output || testCase.expected;
+        testExpectedDisplay.innerHTML = `<pre>${expectedOutput}</pre>`;
         
         // Display actual output if test has been run
-        if (testResults[index]) {
+        if (testResults && testResults[index]) {
             actualOutputSection.style.display = 'block';
-            testActualDisplay.innerHTML = `<pre>${testResults[index].actual_output}</pre>`;
-            testResultBadge.textContent = testResults[index].passed ? 'Passed' : 'Failed';
-            testResultBadge.className = `test-result-badge ${testResults[index].passed ? 'passed' : 'failed'}`;
+            const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+            testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
+            
+            // Update result badge with detailed feedback
+            if (testResults[index].passed) {
+                testResultBadge.innerHTML = '<i class="fas fa-check"></i> Test Case ' + (index + 1) + ' Passed';
+                testResultBadge.className = 'badge success';
+            } else {
+                const isHidden = testCase.hidden;
+                const failMessage = isHidden ? 
+                    'Hidden Test Case ' + (index + 1) + ' Failed' :
+                    'Test Case ' + (index + 1) + ' Failed';
+                testResultBadge.innerHTML = `<i class="fas fa-times"></i> ${failMessage}`;
+                testResultBadge.className = 'badge error';
+                if (testResults[index].error) {
+                    testActualDisplay.innerHTML += `<pre class="error">${testResults[index].error}</pre>`;
+                }
+                if (!isHidden) {
+                    testActualDisplay.innerHTML += `<pre class="error">Expected: ${expectedOutput}\nActual: ${actualOutput}</pre>`;
+                }
+            }
         } else {
             actualOutputSection.style.display = 'none';
-            testResultBadge.textContent = 'Not tested';
-            testResultBadge.className = 'test-result-badge not-tested';
+            testResultBadge.innerHTML = '<i class="fas fa-minus"></i> Test Case ' + (index + 1) + ' Not Run';
+            testResultBadge.className = 'badge';
         }
     }
 }
 
-// Initialize event listeners
+// Initialize event listeners with optimizations
 function initEventListeners() {
-    document.getElementById('runCode').addEventListener('click', runTests);
-    document.getElementById('submitCode').addEventListener('click', submitCode);
-    document.getElementById('hintBtn').addEventListener('click', showHint);
-    document.getElementById('language').addEventListener('change', changeLanguage);
-    document.getElementById('loadRandomBtn').addEventListener('click', loadRandomChallenge);
-    document.getElementById('runAllTests').addEventListener('click', runAllTestsAndSubmit);
-    // Results panel run all tests button (class-based)
-    document.querySelectorAll('.results-run-all-tests').forEach(btn => {
-        btn.addEventListener('click', runAllTestsAndSubmit);
-    });
+    // Run button - debounced to prevent rapid clicks
+    const runBtn = document.getElementById('runCode');
+    if (runBtn) {
+        const debouncedRun = debounce(async () => {
+            if (runBtn.disabled) return;
+            runBtn.disabled = true;
+            try {
+                await runTests();
+            } finally {
+                setTimeout(() => {
+                    runBtn.disabled = false;
+                }, 500);
+            }
+        }, 300);
+        runBtn.addEventListener('click', debouncedRun);
+    }
+
+    // Submit button - debounced
+    const submitBtn = document.getElementById('submitCode');
+    if (submitBtn) {
+        const debouncedSubmit = debounce(async () => {
+            if (submitBtn.disabled) return;
+            submitBtn.disabled = true;
+            try {
+                await submitSolution();
+            } finally {
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                }, 500);
+            }
+        }, 300);
+        submitBtn.addEventListener('click', debouncedSubmit);
+    }
+
+    // Hint button - instant response
+    const hintBtn = document.getElementById('hintBtn');
+    if (hintBtn) {
+        hintBtn.addEventListener('click', () => {
+            if (!hintBtn.disabled) {
+                showHint();
+            }
+        });
+    }
+
+    // Language selector - debounced
+    const langSelect = document.getElementById('language');
+    if (langSelect) {
+        const debouncedChange = debounce((event) => {
+            changeLanguage(event);
+        }, 300);
+        langSelect.addEventListener('change', debouncedChange);
+    }
+
+    // Random challenge button - debounced
+    const randomBtn = document.getElementById('loadRandomBtn');
+    if (randomBtn) {
+        const debouncedRandom = debounce(async () => {
+            if (randomBtn.disabled) return;
+            randomBtn.disabled = true;
+            try {
+                await loadRandomChallenge();
+            } finally {
+                setTimeout(() => {
+                    randomBtn.disabled = false;
+                }, 500);
+            }
+        }, 300);
+        randomBtn.addEventListener('click', debouncedRandom);
+    }
 }
 
 // Initialize UI handlers for modals and notifications
@@ -376,27 +531,20 @@ function hideSubmissionModal() {
 
 // Show random challenge modal
 function showRandomChallengeModal(language, difficulty, title) {
-    const randomChallengeModal = document.getElementById('randomChallengeModal');
-    const randomLanguage = document.getElementById('randomLanguage');
-    const randomDifficulty = document.getElementById('randomDifficulty');
-    const randomTitle = document.getElementById('randomTitle');
-    const randomChallengeIcon = document.getElementById('randomChallengeIcon');
+    const modal = document.getElementById('randomChallengeModal');
+    const languageElement = document.getElementById('randomLanguage');
+    const difficultyElement = document.getElementById('randomDifficulty');
+    const titleElement = document.getElementById('randomTitle');
+    const messageElement = document.getElementById('randomChallengeMessage');
     
-    // Set modal content
-    randomLanguage.textContent = language.charAt(0).toUpperCase() + language.slice(1);
-    randomDifficulty.textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
-    randomTitle.textContent = title;
+    if (languageElement) languageElement.textContent = language;
+    if (difficultyElement) difficultyElement.textContent = difficulty;
+    if (titleElement) titleElement.textContent = title;
+    if (messageElement) {
+        messageElement.textContent = `Your random ${difficulty} challenge in ${language} has been loaded! Good luck fixing the bug!`;
+    }
     
-    // Set appropriate icon based on difficulty
-    const iconMap = {
-        'basic': 'fas fa-dice',
-        'intermediate': 'fas fa-dice-d6',
-        'advanced': 'fas fa-dice-d20',
-        'expert': 'fas fa-dice-d20'
-    };
-    randomChallengeIcon.className = iconMap[difficulty] || 'fas fa-dice';
-    
-    randomChallengeModal.classList.add('show');
+    modal.classList.add('show');
 }
 
 function hideRandomChallengeModal() {
@@ -495,48 +643,237 @@ function updateHintsSidebar() {
 // Update the hint button and section display
 function updateHintsDisplay() {
     const hintBtn = document.getElementById('hintBtn');
-    if (!challengeHints || challengeHints.length === 0) {
+    const hintsSection = document.getElementById('hintsSection');
+    
+    if (!currentChallenge) {
         hintBtn.style.display = 'none';
+        hintsSection.style.display = 'none';
         return;
     }
+    
+    // Initialize hints array if not present
+    if (!challengeHints) {
+        challengeHints = [];
+    }
+    
+    // Always show the hint button, but disable it if no hints are available
     hintBtn.style.display = 'inline-flex';
-    const hintsLeft = challengeHints.length - revealedHints.length;
-    if (hintsLeft <= 0) {
+    
+    // Update hint button text and state
+    const remainingHints = challengeHints.length - revealedHints.length;
+    if (remainingHints <= 0) {
         hintBtn.disabled = true;
-        hintBtn.innerHTML = '<i class="fas fa-lightbulb"></i>No More Hints';
+        hintBtn.innerHTML = `
+            <i class="fas fa-lightbulb"></i>
+            No more hints
+        `;
     } else {
         hintBtn.disabled = false;
-        hintBtn.innerHTML = `<i class="fas fa-lightbulb"></i>Hint (-2 pts) [${hintsLeft} left]`;
+        hintBtn.innerHTML = `
+            <i class="fas fa-lightbulb"></i>
+            Hint (${remainingHints})
+        `;
+    }
+    
+    // Show/hide hints section based on whether there are any hints
+    hintsSection.style.display = challengeHints.length > 0 ? 'block' : 'none';
+    
+    // Update hints list
+    const hintsList = document.getElementById('hintsList');
+    hintsList.innerHTML = '';
+    
+    revealedHints.forEach((hintIndex) => {
+        const hint = challengeHints[hintIndex];
+        if (hint) {
+            const hintElement = document.createElement('div');
+            hintElement.className = 'hint-item';
+            hintElement.innerHTML = `
+                <div class="hint-header">
+                    <span class="hint-number">Hint ${hintIndex + 1}</span>
+                </div>
+                <div class="hint-content">${hint}</div>
+            `;
+            hintsList.appendChild(hintElement);
+        }
+    });
+}
+
+// Update score display
+function updateScore() {
+    const scoreElements = [
+        document.getElementById('score'),
+        document.getElementById('scoreValue'),
+        document.getElementById('finalScore')
+    ];
+    
+    scoreElements.forEach(element => {
+        if (element) {
+            element.textContent = `${score}/10`;
+        }
+    });
+}
+
+// Submit code for validation
+async function submitSolution() {
+    if (!currentChallenge) {
+        showResultsNotification('Error', 'No challenge loaded', 'error');
+        return;
+    }
+
+    const code = editor.getValue();
+    if (!code.trim()) {
+        showResultsNotification('Error', 'Please write some code first', 'error');
+        return;
+    }
+
+    try {
+        // Show loading state
+        const submitBtn = document.getElementById('submitCode');
+        if (!submitBtn) {
+            console.error('Submit button not found');
+            showResultsNotification('Error', 'Internal error: Submit button not found', 'error');
+            return;
+        }
+
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+        submitBtn.disabled = true;
+
+        // Initialize test results and show running state
+        testResults = [];
+        testCases.forEach((_, index) => {
+            testResults[index] = { status: 'running' };
+            showTestCase(index);
+        });
+
+        try {
+            const response = await fetch(getApiUrl('/validate'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    code: code,
+                    language: currentLanguage,
+                    challenge_id: currentChallenge.challenge_id,
+                    difficulty: currentChallenge.difficulty
+                })
+            });
+
+            const data = await response.json();
+            console.log('Submission results:', data);
+
+            // Process visible test results first with delay
+            if (data.visible_results && data.visible_results.test_results) {
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Visible Tests...';
+                for (let i = 0; i < data.visible_results.test_results.length; i++) {
+                    testResults[i] = data.visible_results.test_results[i];
+                    showTestCase(i);
+                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                }
+            }
+
+            // Process hidden test results
+            if (data.hidden_results && data.hidden_results.test_results) {
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Hidden Tests...';
+                const startIndex = testResults.length;
+                for (let i = 0; i < data.hidden_results.test_results.length; i++) {
+                    const result = data.hidden_results.test_results[i];
+                    testResults[startIndex + i] = {
+                        ...result,
+                        output: result.passed ? '[Hidden Test Output]' : 'Test Failed',
+                        error: result.error || (result.passed ? null : 'Hidden test case failed')
+                    };
+                    showTestCase(startIndex + i);
+                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                }
+            }
+
+            updateTestResults();
+
+            if (data.success && data.all_passed) {
+                // Show success message with score
+                showResultsNotification(
+                    'Success', 
+                    `Congratulations! All test cases passed (including hidden tests). Score: ${data.score}`, 
+                    'success'
+                );
+                
+                // Update user progress if needed
+                if (typeof updateUserProgress === 'function') {
+                    updateUserProgress(currentChallenge.challenge_id, data.score);
+                }
+            } else {
+                // Show appropriate error message
+                if (data.error === 'Hidden test cases failed') {
+                    const visiblePassed = data.visible_results.test_results.every(r => r.passed);
+                    const message = visiblePassed ?
+                        'Your code passed all visible test cases but failed some hidden test cases. Try to make your solution more robust!' :
+                        'Some test cases failed. Please check the results and try again.';
+                    showResultsNotification('Warning', message, 'warning');
+                } else {
+                    showResultsNotification(
+                        'Error',
+                        data.error || 'Not all test cases passed. Please fix your solution and try again.',
+                        'error'
+                    );
+                }
+            }
+        } finally {
+            // Always reset button state
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Error submitting solution:', error);
+        showResultsNotification('Error', 'Failed to submit solution: ' + error.message, 'error');
+        
+        // Reset button state if we can
+        const submitBtn = document.getElementById('submitCode');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
+            submitBtn.disabled = false;
+        }
     }
 }
 
-// --- CHALLENGE LOADING: fetch and store hints array, reset revealed hints ---
+// Update loadCurrentChallenge to use correct API endpoint
 async function loadCurrentChallenge() {
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    if (loadingIndicator) {
-        loadingIndicator.style.display = 'block';
-    }
     try {
-        const response = await fetch(`${API_BASE}/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
-        const data = await response.json();
+        const data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
+        
         if (data.success) {
             currentChallenge = data.challenge;
-            // --- HINTS: robustly fetch and store hints array ---
+            testCases = currentChallenge.test_cases || [];
             challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
             revealedHints = [];
+            
+            // Reset state
+            score = 10;
             hintsUsed = 0;
+            wrongSubmissions = 0;
+            attempts = 0;
+            startTime = Date.now();
+            
             updateChallengeDisplay();
-            updateHintsSidebar(); // <-- Ensure sidebar is reset after loading
+            updateScore();
+            
+            // Show first test case
+            if (testCases.length > 0) {
+                currentTestCase = 0;
+                showTestCase(0);
+                updateActiveTestCaseButton();
+            }
+            
         } else {
-            throw new Error(data.error || 'Failed to load challenge');
+            throw new Error(data.error);
         }
+        
     } catch (error) {
-        console.error('Error loading challenge:', error);
-        showResultsNotification('Loading Error', `Failed to load challenge: ${error.message}`, 'error');
-    } finally {
-        if (loadingIndicator) {
-            loadingIndicator.style.display = 'none';
-        }
+        console.error('Challenge loading error:', error);
+        showResultsNotification('Loading Failed', `Failed to load challenge: ${error.message}`, 'error');
     }
 }
 
@@ -550,20 +887,35 @@ function updateChallengeDisplay() {
     console.log('Updating challenge display:', currentChallenge);
     
     // Update title and difficulty badge
-    document.getElementById('challengeTitle').textContent = currentChallenge.title;
-    document.getElementById('difficultyBadge').textContent = currentChallenge.difficulty.toUpperCase();
+    const titleElement = document.getElementById('challengeTitle');
+    const difficultyBadge = document.getElementById('difficultyBadge');
     
-    // Update description
-    document.getElementById('challengeDescription').innerHTML = currentChallenge.description || '';
+    if (titleElement && currentChallenge.title) {
+        titleElement.textContent = currentChallenge.title;
+    }
+    
+    if (difficultyBadge && currentChallenge.difficulty) {
+        difficultyBadge.textContent = currentChallenge.difficulty.toUpperCase();
+        difficultyBadge.className = `difficulty-badge ${currentChallenge.difficulty.toLowerCase()}`;
+    }
+    
+    // Update description (if available)
+    const descriptionElement = document.getElementById('challengeDescription');
+    if (descriptionElement) {
+        descriptionElement.innerHTML = currentChallenge.description || '';
+    }
     
     // Update problem statement with proper newline handling
-    const problemStatement = currentChallenge.problem_statement || '';
-    const formattedProblem = problemStatement.replace(/\n/g, '<br>');
-    document.getElementById('challengeProblem').innerHTML = formattedProblem;
+    const problemElement = document.getElementById('challengeProblem');
+    if (problemElement && currentChallenge.problem_statement) {
+        const formattedProblem = currentChallenge.problem_statement.replace(/\n/g, '<br>');
+        problemElement.innerHTML = formattedProblem;
+    }
     
     // Update code editor with buggy code
-    if (currentChallenge.buggy_code) {
+    if (editor && currentChallenge.buggy_code) {
         editor.setValue(currentChallenge.buggy_code);
+        editor.refresh(); // Force CodeMirror to refresh
     }
     
     // Update test cases
@@ -575,58 +927,63 @@ function updateChallengeDisplay() {
     // Apply theme based on difficulty
     applyTheme(currentChallenge.difficulty);
     
-    // Clear hints list when loading a new challenge
+    // Reset hints when loading a new challenge
     const hintsList = document.getElementById('hintsList');
     if (hintsList) {
         hintsList.innerHTML = '';
         console.log('Cleared hints list');
     }
+    
     // Ensure hints sidebar is reset and shown appropriately
     updateHintsSidebar();
+    
+    console.log('Challenge display updated successfully');
 }
 
-// Update test cases display
+// Update test cases display to handle test case objects
 function updateTestCasesDisplay() {
-    if (!currentChallenge) return;
-    
-    testCases = [];
-    testResults = [];
-    
-    for (let i = 1; i <= 5; i++) {
-        const input = currentChallenge[`test_case_${i}_input`];
-        const expected = currentChallenge[`test_case_${i}_expected`];
-        const description = currentChallenge[`test_case_${i}_description`];
-        
-        if (input && expected) {
-            testCases.push({
-                input: input,
-                expected_output: expected,
-                description: description || `Test case ${i}`
-            });
-        }
+    if (!currentChallenge || !testCases) {
+        console.log('No challenge data available for test cases');
+        return;
     }
     
+    console.log('Updating test cases display');
+    testResults = [];
+    
+    // Update test case buttons
     const testCaseButtons = document.getElementById('testCaseButtons');
     if (testCaseButtons && testCases.length > 0) {
         let buttonsHtml = '';
         testCases.forEach((testCase, index) => {
-            buttonsHtml += `<button class="test-case-btn ${index === 0 ? 'active' : ''}" data-case="${index}">Case ${index + 1}</button>`;
+            buttonsHtml += `
+                <button class="test-case-btn ${index === 0 ? 'active' : ''}" data-case="${index}">
+                    Case ${index + 1}
+                </button>`;
         });
         testCaseButtons.innerHTML = buttonsHtml;
         
+        // Reinitialize test case navigation
         initTestCaseNavigation();
         
+        // Show first test case
         currentTestCase = 0;
         showTestCase(0);
         
-        const totalCount = document.querySelector('.total-count');
-        const passedCount = document.querySelector('.passed-count');
-        if (totalCount) totalCount.textContent = testCases.length;
-        if (passedCount) passedCount.textContent = '0';
+        // Update test summary
+        const testSummary = document.getElementById('testSummary');
+        if (testSummary) {
+            testSummary.style.display = 'block';
+            const totalCount = testSummary.querySelector('.total-count');
+            const passedCount = testSummary.querySelector('.passed-count');
+            if (totalCount) totalCount.textContent = testCases.length;
+            if (passedCount) passedCount.textContent = '0';
+        }
+    } else {
+        console.log('No test cases found or test case buttons container missing');
     }
 }
 
-// Load random challenge
+// Update loadRandomChallenge to properly handle test cases and score
 async function loadRandomChallenge() {
     const randomBtn = document.getElementById('loadRandomBtn');
     const originalText = randomBtn.innerHTML;
@@ -635,7 +992,7 @@ async function loadRandomChallenge() {
     randomBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Loading...';
     
     try {
-        const response = await fetch(`${API_BASE}/challenge/random/${currentLanguage}`);
+        const response = await fetch(getApiUrl(`/challenge/random/${currentLanguage}`));
         const data = await response.json();
         
         if (data.success) {
@@ -646,8 +1003,17 @@ async function loadRandomChallenge() {
             currentChallengeId = randomInfo.challenge_id;
             currentChallenge = data.challenge;
             
-            document.getElementById('language').value = currentLanguage;
+            // Extract test cases from challenge data
+            testCases = currentChallenge.test_cases || [];
+            testResults = [];
             
+            // Update language selector
+            const langSelect = document.getElementById('language');
+            if (langSelect) {
+                langSelect.value = currentLanguage;
+            }
+            
+            // Update editor mode
             let mode = currentLanguage;
             if (currentLanguage === 'java') {
                 mode = 'text/x-java';
@@ -656,32 +1022,36 @@ async function loadRandomChallenge() {
             }
             editor.setOption('mode', mode);
             
+            // Reset state
             score = 10;
             hintsUsed = 0;
             wrongSubmissions = 0;
             attempts = 0;
             startTime = Date.now();
-            // --- HINTS: robustly fetch and store hints array ---
+            
+            // Update hints
             challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
             revealedHints = [];
-            updateScore();
             
+            // Update display
             updateChallengeDisplay();
+            updateScore();
+            updateHintsDisplay();
             
-            // Show the random challenge modal instead of alert
+            // Show the random challenge modal
             showRandomChallengeModal(currentLanguage, currentDifficulty, currentChallenge.title);
             
         } else {
-            throw new Error(data.error);
+            throw new Error(data.error || 'Failed to load random challenge');
         }
         
     } catch (error) {
         console.error('Random challenge loading error:', error);
         showResultsNotification('Loading Failed', `Failed to load random challenge: ${error.message}`, 'error');
+    } finally {
+        randomBtn.disabled = false;
+        randomBtn.innerHTML = originalText;
     }
-    
-    randomBtn.disabled = false;
-    randomBtn.innerHTML = originalText;
 }
 
 // Change programming language
@@ -733,4 +1103,151 @@ function extractFunctionName(code, language) {
         default:
             return 'main_function';
     }
+}
+
+// Run tests for current challenge
+async function runTests() {
+    // Get button first and store original state
+    const runBtn = document.getElementById('runCode');
+    const originalText = runBtn ? runBtn.innerHTML : '';
+    let buttonRestored = false;
+
+    // Function to restore button state
+    const restoreButton = () => {
+        if (runBtn && !buttonRestored) {
+            runBtn.innerHTML = originalText;
+            runBtn.disabled = false;
+            buttonRestored = true;
+        }
+    };
+
+    try {
+        if (!currentChallenge) {
+            showResultsNotification('Error', 'No challenge loaded', 'error');
+            return;
+        }
+
+        const code = editor.getValue();
+        if (!code.trim()) {
+            showResultsNotification('Error', 'Please write some code first', 'error');
+            return;
+        }
+
+        // Initialize test results
+        testResults = [];
+        // Show initial state for all test cases
+        if (!testCases || !Array.isArray(testCases)) {
+            showResultsNotification('Error', 'No test cases available', 'error');
+            return;
+        }
+
+        testCases.forEach((_, index) => {
+            testResults[index] = { status: 'running' };
+            showTestCase(index);
+        });
+
+        // Update button state
+        if (runBtn) {
+            runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            runBtn.disabled = true;
+        }
+
+        // Prepare request data
+        const requestData = {
+            code: code,
+            language: currentLanguage,
+            test_cases: testCases
+        };
+
+        // Execute tests with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+        try {
+            const response = await fetch(getApiUrl('/execute'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const data = await response.json();
+            console.log('Test results:', data);
+
+            if (data.success) {
+                // Ensure test_results exists and is an array
+                const testResultsArray = Array.isArray(data.test_results) ? data.test_results : [];
+                
+                // Process test results one by one with a small delay for visual feedback
+                for (let i = 0; i < testResultsArray.length; i++) {
+                    testResults[i] = testResultsArray[i];
+                    showTestCase(i);
+                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                }
+                
+                updateTestResults();
+                
+                // Show success/failure message
+                const testsPassedCount = data.tests_passed || 0;
+                const totalTestsCount = data.total_tests || testResultsArray.length;
+                
+                if (testsPassedCount === totalTestsCount) {
+                    showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
+                } else {
+                    const failedTests = totalTestsCount - testsPassedCount;
+                    const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
+                    showResultsNotification('Warning', failMessage, 'warning');
+                }
+            } else {
+                testResults = [];  // Reset test results on error
+                updateTestResults();
+                showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                showResultsNotification('Error', 'Test execution timed out. Please try again.', 'error');
+            } else {
+                throw error;
+            }
+        }
+
+    } catch (error) {
+        console.error('Error running tests:', error);
+        testResults = [];  // Reset test results on error
+        updateTestResults();
+        showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
+    } finally {
+        // Always restore button state
+        restoreButton();
+    }
+}
+
+// Helper function to update test results in the UI
+function updateTestResults() {
+    if (!testResults) {
+        testResults = [];  // Initialize if undefined
+    }
+    
+    // Update test panel for each test case
+    testCases.forEach((_, index) => {
+        showTestCase(index);
+    });
+    
+    // Update overall test status
+    const passedTests = testResults.filter(result => result && result.passed).length;
+    const totalTests = testResults.length;
+    const testStatusElement = document.getElementById('testStatus');
+    if (testStatusElement) {
+        testStatusElement.innerHTML = `${passedTests}/${totalTests} tests passed`;
+        testStatusElement.className = passedTests === totalTests ? 'success' : 'warning';
+    }
+}
+
+// Get elapsed time in seconds
+function getElapsedTime() {
+    return Math.floor((Date.now() - startTime) / 1000);
 }

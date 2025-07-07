@@ -182,6 +182,14 @@ def get_challenge_by_id(language, difficulty, challenge_id):
         challenge['difficulty'] = difficulty
         challenge['language'] = language
         
+        # Combine hints into an array
+        hints = []
+        for i in range(1, 4):  # hint_1 through hint_3
+            hint_key = f'hint_{i}'
+            if hint_key in challenge and challenge[hint_key]:
+                hints.append(challenge[hint_key])
+        challenge['hints'] = hints
+        
         # Extract test cases from the challenge record
         test_cases = []
         for i in range(1, 6):  # Up to 5 test cases
@@ -191,13 +199,17 @@ def get_challenge_by_id(language, difficulty, challenge_id):
             if challenge.get(input_key) and challenge.get(expected_key):
                 test_cases.append({
                     'input': challenge[input_key],
-                    'expected': challenge[expected_key],
-                    'number': i
+                    'expected_output': challenge[expected_key]
                 })
+                # Remove the individual test case fields
+                del challenge[input_key]
+                del challenge[expected_key]
         
+        # Add test cases array to challenge
         challenge['test_cases'] = test_cases
-    
-    return challenge
+        
+        return challenge
+    return None
 
 def get_all_available_challenges():
     """Get summary of all available challenges across all languages and difficulties"""

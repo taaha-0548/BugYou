@@ -12,6 +12,9 @@ import re
 import random
 import time
 from functools import wraps
+import json
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 
 # Import our database functions
 from database_config import (
@@ -34,6 +37,80 @@ PISTON_API = 'https://emkc.org/api/v2/piston'
 _cache = {}
 _cache_timeout = 300  # 5 minutes
 
+# Cache for code execution results
+_execution_cache = {}
+_execution_cache_timeout = 60  # 1 minute
+
+# Language configuration for Piston API
+PISTON_LANGUAGES = {
+    'python': {
+        'lang': 'python',
+        'version': '3.10.0',
+        'filename': 'main.py',
+        'template': '''
+def {func_name}(input_value):
+    # User code here
+    {user_code}
+
+# Test case
+test_input = {test_input}
+result = {func_name}(test_input)
+print(result)
+'''
+    },
+    'javascript': {
+        'lang': 'javascript',
+        'version': '18.15.0',
+        'filename': 'main.js',
+        'template': '''
+function {func_name}(input) {{
+    // User code here
+    {user_code}
+}}
+
+// Test case
+const test_input = {test_input};
+const result = {func_name}(test_input);
+console.log(result);
+'''
+    },
+    'java': {
+        'lang': 'java',
+        'version': '19.0.2',
+        'filename': 'Main.java',
+        'template': '''
+public class Main {{
+    {user_code}
+
+    public static void main(String[] args) {{
+        var test_input = {test_input};
+        var result = {func_name}(test_input);
+        System.out.println(result);
+    }}
+}}
+'''
+    },
+    'cpp': {
+        'lang': 'cpp',
+        'version': '11.2.0',
+        'filename': 'main.cpp',
+        'template': '''
+#include <iostream>
+#include <string>
+using namespace std;
+
+{user_code}
+
+int main() {{
+    auto test_input = {test_input};
+    auto result = {func_name}(test_input);
+    cout << result << endl;
+    return 0;
+}}
+'''
+    }
+}
+
 def cache_result(timeout=300):
     """Decorator to cache API results"""
     def decorator(f):
@@ -54,6 +131,17 @@ def cache_result(timeout=300):
             return result
         return decorated_function
     return decorator
+
+@app.route('/api/cache/clear')
+def clear_cache():
+    """Clear the API cache"""
+    global _cache
+    _cache = {}
+    return jsonify({
+        'success': True,
+        'message': 'Cache cleared successfully',
+        'timestamp': datetime.now().isoformat()
+    })
 
 # ================================
 # SERVE FRONTEND
@@ -156,56 +244,115 @@ def get_challenge_details(language, difficulty, challenge_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def get_cache_key(code, language, test_cases):
+    """Generate a cache key for code execution"""
+    test_cases_str = json.dumps(test_cases, sort_keys=True)
+    return f"{language}:{hashlib.md5((code + test_cases_str).encode()).hexdigest()}"
+
+def get_cached_execution(code, language, test_cases):
+    """Get cached execution result if available"""
+    cache_key = get_cache_key(code, language, test_cases)
+    if cache_key in _execution_cache:
+        result, timestamp = _execution_cache[cache_key]
+        if time.time() - timestamp < _execution_cache_timeout:
+            return result
+        del _execution_cache[cache_key]
+    return None
+
+def set_cached_execution(code, language, test_cases, result):
+    """Cache execution result"""
+    cache_key = get_cache_key(code, language, test_cases)
+    _execution_cache[cache_key] = (result, time.time())
+    
+    # Clean old cache entries
+    current_time = time.time()
+    expired_keys = [
+        k for k, (_, t) in _execution_cache.items() 
+        if current_time - t > _execution_cache_timeout
+    ]
+    for k in expired_keys:
+        del _execution_cache[k]
+
 @app.route('/api/execute', methods=['POST'])
 def execute_code():
-    """Execute user code via Piston API"""
+    """Execute user code against visible test cases only"""
     try:
         data = request.get_json()
         code = data.get('code')
         language = data.get('language')
+        test_cases = data.get('test_cases', [])
         
         if not code or not language:
             return jsonify({'success': False, 'error': 'Code and language required'}), 400
         
-        # Map language names to Piston API format
-        lang_map = {
-            'python': {'lang': 'python', 'filename': 'main.py'},
-            'javascript': {'lang': 'javascript', 'filename': 'main.js'},
-            'java': {'lang': 'java', 'filename': 'Main.java'},
-            'cpp': {'lang': 'cpp', 'filename': 'main.cpp'}
-        }
+        # Check cache first
+        cached_result = get_cached_execution(code, language, test_cases)
+        if cached_result:
+            return jsonify(cached_result)
         
-        if language not in lang_map:
+        # Check if language is supported
+        if language not in PISTON_LANGUAGES:
             return jsonify({'success': False, 'error': 'Unsupported language'}), 400
         
-        config = lang_map[language]
+        config = PISTON_LANGUAGES[language]
         
-        # Prepare Piston API request
-        piston_request = {
-            'language': config['lang'],
-            'version': '*',
-            'files': [{'name': config['filename'], 'content': code}]
+        # First check if code compiles
+        compilation = check_code_compilation(code, language, config)
+        if not compilation['success'] or not compilation['compiles']:
+            result = {
+                'success': False,
+                'error': 'Compilation failed',
+                'details': compilation['error']
+            }
+            set_cached_execution(code, language, test_cases, result)
+            return jsonify(result), 400
+            
+        # Extract function name for test case setup
+        func_name = extract_function_name(code, language)
+        if not func_name:
+            result = {
+                'success': False,
+                'error': 'Could not identify main function'
+            }
+            set_cached_execution(code, language, test_cases, result)
+            return jsonify(result), 400
+            
+        # Run each test case
+        test_results = []
+        tests_passed = 0
+        
+        # Run test cases in parallel for better performance
+        with ThreadPoolExecutor(max_workers=min(4, len(test_cases))) as executor:
+            futures = [
+                executor.submit(
+                    execute_single_test,
+                    code=code,
+                    config={'lang': language},
+                    test_input=test_case['input'],
+                    expected=test_case['expected_output'] or test_case['expected'],
+                    test_number=i + 1,
+                    challenge={'id': 0}
+                )
+                for i, test_case in enumerate(test_cases)
+            ]
+            
+            for future in futures:
+                result = future.result()
+                if result['passed']:
+                    tests_passed += 1
+                test_results.append(result)
+            
+        result = {
+            'success': True,
+            'test_results': test_results,
+            'tests_passed': tests_passed,
+            'total_tests': len(test_cases)
         }
         
-        # Execute code via Piston API
-        response = requests.post(
-            f'{PISTON_API}/execute',
-            headers={'Content-Type': 'application/json'},
-            json=piston_request,
-            timeout=10
-        )
+        # Cache successful result
+        set_cached_execution(code, language, test_cases, result)
         
-        if response.status_code == 200:
-            result = response.json()
-            return jsonify({
-                'success': True,
-                'result': result
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'Execution failed: {response.status_code}'
-            }), 500
+        return jsonify(result)
             
     except requests.RequestException as e:
         return jsonify({'success': False, 'error': f'Network error: {str(e)}'}), 500
@@ -214,15 +361,15 @@ def execute_code():
 
 @app.route('/api/validate', methods=['POST'])
 def validate_submission():
-    """Validate user submission against test cases"""
+    """Validate user submission against all test cases (visible and hidden)"""
     try:
         data = request.get_json()
         code = data.get('code')
         language = data.get('language')
-        difficulty = data.get('difficulty')
         challenge_id = data.get('challenge_id')
+        difficulty = data.get('difficulty')
         
-        if not all([code, language, difficulty, challenge_id]):
+        if not all([code, language, challenge_id, difficulty]):
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
         # Get challenge details with test cases
@@ -233,42 +380,110 @@ def validate_submission():
         # Run validation against all test cases
         results = run_test_validation(code, language, challenge)
         
-        return jsonify({
-            'success': True,
-            'results': results
-        })
+        # Check if all tests passed (including hidden tests)
+        visible_tests = challenge.get('test_cases', [])
+        hidden_tests = []
+        for i in range(1, 3):  # Up to 2 hidden tests
+            input_key = f'hidden_test_{i}_input'
+            expected_key = f'hidden_test_{i}_expected'
+            if challenge.get(input_key) and challenge.get(expected_key):
+                hidden_tests.append({
+                    'input': challenge[input_key],
+                    'expected': challenge[expected_key],
+                    'number': len(visible_tests) + i
+                })
         
+        # Run hidden tests if all visible tests passed
+        if results['tests_passed'] == len(visible_tests):
+            for test_case in hidden_tests:
+                result = execute_single_test(
+                    code=code,
+                    config=lang_map[language],
+                    test_input=test_case['input'],
+                    expected=test_case['expected'],
+                    test_number=test_case['number'],
+                    challenge=challenge
+                )
+                if not result['passed']:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Hidden test cases failed',
+                        'visible_results': results,
+                        'all_passed': False
+                    })
+            
+            # All tests passed (visible and hidden)
+            return jsonify({
+                'success': True,
+                'message': 'All test cases passed!',
+                'visible_results': results,
+                'all_passed': True,
+                'score': results['score']
+            })
+        else:
+            # Not all visible tests passed
+            return jsonify({
+                'success': False,
+                'error': 'Not all visible test cases passed',
+                'visible_results': results,
+                'all_passed': False
+            })
+            
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def check_code_compilation(code, language, config):
     """Check if code compiles without running it"""
     try:
-        # Prepare Piston API request for compilation check
+        # Clean user code
+        clean_code = clean_user_code(code, language)
+        
+        # For interpreted languages, we'll do a syntax check
+        if language in ['python', 'javascript']:
+            # Create a minimal test code that just defines the function
+            test_code = config['template'].format(
+                func_name='test_function',
+                user_code=clean_code,
+                test_input='null'
+            )
+        else:
+            # For compiled languages, we'll try to compile the full program
+            test_code = config['template'].format(
+                func_name=extract_function_name(code, language) or 'main',
+                user_code=clean_code,
+                test_input='0'  # Dummy input that should compile
+            )
+        
+        # Execute compilation via Piston API
         piston_request = {
             'language': config['lang'],
-            'version': '*',
-            'files': [{'name': config['filename'], 'content': code}],
-            'compile_timeout': 5000,  # 5 seconds
+            'version': config['version'],
+            'files': [{'name': config['filename'], 'content': test_code}],
+            'compile_timeout': 10000,  # 10 seconds
             'run_timeout': 0,  # Don't run, just compile
             'compile_memory_limit': -1,
             'run_memory_limit': -1
         }
         
-        # Execute compilation via Piston API
         response = requests.post(
             f'{PISTON_API}/execute',
             headers={'Content-Type': 'application/json'},
             json=piston_request,
-            timeout=10
+            timeout=15
         )
         
         if response.status_code == 200:
             result = response.json()
+            compile_error = result.get('compile', {}).get('stderr', '')
+            
+            # For interpreted languages, runtime errors during parsing are compilation errors
+            if language in ['python', 'javascript']:
+                compile_error = compile_error or result.get('run', {}).get('stderr', '')
+            
             return {
                 'success': True,
-                'compiles': not bool(result.get('compile', {}).get('stderr')),
-                'error': result.get('compile', {}).get('stderr', '')
+                'compiles': not bool(compile_error),
+                'error': compile_error
             }
         else:
             return {
@@ -359,28 +574,60 @@ def run_test_validation(code, language, challenge):
 def execute_single_test(code, config, test_input, expected, test_number, challenge):
     """Execute a single test case"""
     try:
-        # Prepare test code with input
-        test_code = code + f"\n\n# Test case {test_number}\n"
-        test_code += f"test_input = {test_input}\n"
-        test_code += f"result = {extract_function_name(code, config['lang'])}(test_input)\n"
-        test_code += "print(result)"
+        # Get language config
+        lang_config = PISTON_LANGUAGES.get(config['lang'])
+        if not lang_config:
+            return {
+                'test_number': test_number,
+                'passed': False,
+                'error': f'Unsupported language: {config["lang"]}',
+                'output': None,
+                'expected': expected
+            }
+
+        # Extract function name
+        func_name = extract_function_name(code, config['lang'])
+        if not func_name:
+            return {
+                'test_number': test_number,
+                'passed': False,
+                'error': 'Could not identify main function',
+                'output': None,
+                'expected': expected
+            }
+
+        # Clean user code by removing any existing main/test functions
+        clean_code = clean_user_code(code, config['lang'])
+        
+        # Prepare test code using template
+        test_code = lang_config['template'].format(
+            func_name=func_name,
+            user_code=clean_code,
+            test_input=test_input
+        )
         
         # Execute via Piston API
         piston_request = {
-            'language': config['lang'],
-            'version': '*',
-            'files': [{'name': config['filename'], 'content': test_code}],
-            'compile_timeout': 5000,  # 5 seconds
-            'run_timeout': 5000,  # 5 seconds
-            'compile_memory_limit': -1,
-            'run_memory_limit': -1
+            'language': lang_config['lang'],
+            'version': lang_config['version'],
+            'files': [
+                {
+                    'name': lang_config['filename'],
+                    'content': test_code
+                }
+            ],
+            'stdin': '',  # Add input if needed
+            'compile_timeout': 10000,  # 10 seconds
+            'run_timeout': 10000,  # 10 seconds
+            'compile_memory_limit': -1,  # No limit
+            'run_memory_limit': -1  # No limit
         }
         
         response = requests.post(
             f'{PISTON_API}/execute',
             headers={'Content-Type': 'application/json'},
             json=piston_request,
-            timeout=10
+            timeout=15
         )
         
         if response.status_code != 200:
@@ -394,12 +641,22 @@ def execute_single_test(code, config, test_input, expected, test_number, challen
             
         result = response.json()
         
+        # Check for compilation errors
+        if result.get('compile', {}).get('stderr'):
+            return {
+                'test_number': test_number,
+                'passed': False,
+                'error': f'Compilation error: {result["compile"]["stderr"]}',
+                'output': None,
+                'expected': expected
+            }
+        
         # Check for runtime errors
         if result.get('run', {}).get('stderr'):
             return {
                 'test_number': test_number,
                 'passed': False,
-                'error': result['run']['stderr'],
+                'error': f'Runtime error: {result["run"]["stderr"]}',
                 'output': None,
                 'expected': expected
             }
@@ -434,6 +691,34 @@ def compare_outputs(actual, expected, comparison_type='exact'):
     else:
         # Add more comparison types if needed
         return False
+
+def clean_user_code(code, language):
+    """Remove main function and test-related code from user code"""
+    if language == 'python':
+        # Remove any existing test code
+        lines = code.split('\n')
+        clean_lines = [
+            line for line in lines 
+            if not any(x in line.lower() for x in ['test_input', 'print(', '#test'])
+        ]
+        return '\n'.join(clean_lines)
+    elif language == 'javascript':
+        # Remove any existing test code
+        lines = code.split('\n')
+        clean_lines = [
+            line for line in lines 
+            if not any(x in line.lower() for x in ['test_input', 'console.log(', '//test'])
+        ]
+        return '\n'.join(clean_lines)
+    elif language == 'java':
+        # Remove main method and test code
+        code = re.sub(r'public\s+static\s+void\s+main\s*\([^)]*\)\s*{[^}]*}', '', code)
+        return code
+    elif language == 'cpp':
+        # Remove main function and test code
+        code = re.sub(r'int\s+main\s*\([^)]*\)\s*{[^}]*}', '', code)
+        return code
+    return code
 
 @app.route('/api/user/<username>')
 def get_user_info(username):
