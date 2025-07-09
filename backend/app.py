@@ -13,7 +13,7 @@ import time
 from functools import wraps
 import json
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
+# from concurrent.futures import ThreadPoolExecutor  # Removed - using sequential execution to avoid rate limiting
 
 # Import our database functions
 from database_config import (
@@ -57,11 +57,21 @@ PISTON_LANGUAGES = {
         'version': '3.10.0',
         'filename': 'main.py',
         'template': '''
-def {func_name}(input_value):
-    # User code here
-    {user_code}
+import sys
+import math
+import collections
+from collections import defaultdict, deque, Counter
+import heapq
+import bisect
+import itertools
+import functools
+from functools import lru_cache
+import re
+import string
 
-# Test case
+{user_code}
+
+# Test case execution
 test_input = {test_input}
 result = {func_name}(test_input)
 print(result)
@@ -72,28 +82,34 @@ print(result)
         'version': '18.15.0',
         'filename': 'main.js',
         'template': '''
-function {func_name}(input) {{
-    // User code here
-    {user_code}
-}}
+// Common utility functions
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+const lcm = (a, b) => (a * b) / gcd(a, b);
+const isPrime = n => n > 1 && Array.from({{length: Math.sqrt(n)}}, (_, i) => i + 2).every(i => n % i !== 0);
 
-// Test case
-const test_input = {test_input};
-const result = {func_name}(test_input);
+{user_code}
+
+// Test case execution
+const testInput = {test_input};
+const result = {func_name}(testInput);
 console.log(result);
 '''
     },
     'java': {
         'lang': 'java',
-        'version': '19.0.2',
+        'version': '15.0.2',
         'filename': 'Main.java',
         'template': '''
+import java.util.*;
+import java.io.*;
+import java.math.*;
+
 public class Main {{
     {user_code}
-
+    
     public static void main(String[] args) {{
-        var test_input = {test_input};
-        var result = {func_name}(test_input);
+        int[] testInput = {test_input};
+        int result = {func_name}(testInput);
         System.out.println(result);
     }}
 }}
@@ -101,18 +117,29 @@ public class Main {{
     },
     'cpp': {
         'lang': 'cpp',
-        'version': '11.2.0',
+        'version': '10.2.0',
         'filename': 'main.cpp',
         'template': '''
 #include <iostream>
+#include <vector>
+#include <algorithm>
 #include <string>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <queue>
+#include <stack>
+#include <cmath>
+#include <climits>
+
 using namespace std;
 
 {user_code}
 
 int main() {{
-    auto test_input = {test_input};
-    auto result = {func_name}(test_input);
+    vector<int> testInput = {test_input};
+    int result = {func_name}(testInput);
     cout << result << endl;
     return 0;
 }}
@@ -395,7 +422,7 @@ def execute_code():
             set_cached_execution(code, language, test_cases, result)
             return jsonify(result), 400
             
-        # Extract function name for test case setup
+                # Extract function name for test case setup  
         func_name = extract_function_name(code, language)
         if not func_name:
             result = {
@@ -409,26 +436,20 @@ def execute_code():
         test_results = []
         tests_passed = 0
         
-        # Run test cases in parallel for better performance
-        with ThreadPoolExecutor(max_workers=min(4, len(test_cases))) as executor:
-            futures = [
-                executor.submit(
-                    execute_single_test,
-                    code=code,
-                    config={'lang': language},
-                    test_input=test_case['input'],
-                    expected=test_case['expected_output'] or test_case['expected'],
-                    test_number=i + 1,
-                    challenge={'id': 0}
-                )
-                for i, test_case in enumerate(test_cases)
-            ]
-            
-            for future in futures:
-                result = future.result()
-                if result['passed']:
-                    tests_passed += 1
-                test_results.append(result)
+        # Run test cases sequentially to avoid rate limiting
+        for i, test_case in enumerate(test_cases):
+            result = execute_single_test(
+                code=code,
+                config={'lang': language},
+                test_input=test_case['input'],
+                expected=test_case.get('expected_output') or test_case.get('expected'),
+                test_number=i + 1,
+                challenge={'id': 0},
+                func_name=func_name
+            )
+            if result['passed']:
+                tests_passed += 1
+            test_results.append(result)
             
         result = {
             'success': True,
@@ -483,14 +504,36 @@ def validate_submission():
         
         # Run hidden tests if all visible tests passed
         if results['tests_passed'] == len(visible_tests):
+            # Get language configuration
+            if language not in PISTON_LANGUAGES:
+                return jsonify({
+                    'success': False,
+                    'error': f'Unsupported language: {language}',
+                    'visible_results': results,
+                    'all_passed': False
+                })
+            
+            lang_config = {'lang': language}  # Simple config for execute_single_test
+            
+            # Extract function name for hidden tests
+            func_name = extract_function_name(code, language)
+            if not func_name:
+                return jsonify({
+                    'success': False,
+                    'error': 'Could not identify main function for hidden tests',
+                    'visible_results': results,
+                    'all_passed': False
+                })
+            
             for test_case in hidden_tests:
                 result = execute_single_test(
                     code=code,
-                    config=lang_map[language],
+                    config=lang_config,
                     test_input=test_case['input'],
-                    expected=test_case['expected'],
+                    expected=test_case.get('expected'),
                     test_number=test_case['number'],
-                    challenge=challenge
+                    challenge=challenge,
+                    func_name=func_name
                 )
                 if not result['passed']:
                     return jsonify({
@@ -526,79 +569,116 @@ def check_code_compilation(code, language, config):
         # Clean user code
         clean_code = clean_user_code(code, language)
         
+        # Get proper template from PISTON_LANGUAGES
+        lang_config = PISTON_LANGUAGES.get(language)
+        if not lang_config:
+            return {
+                'success': False,
+                'compiles': False,
+                'error': f'Unsupported language: {language}'
+            }
+        
         # For interpreted languages, we'll do a syntax check
         if language in ['python', 'javascript']:
-            # Create a minimal test code that just defines the function
-            test_code = config['template'].format(
-                func_name='test_function',
+            # Use proper null values for each language
+            null_value = 'None' if language == 'python' else 'null'
+            test_code = lang_config['template'].format(
                 user_code=clean_code,
-                test_input='null'
+                test_input=null_value,
+                func_name='test_function'
             )
         else:
-            # For compiled languages, we'll try to compile the full program
-            test_code = config['template'].format(
-                func_name=extract_function_name(code, language) or 'main',
+            # For compiled languages (Java, C++), use proper null initialization
+            if language == 'java':
+                null_value = 'new int[0]'  # Empty array for Java
+            elif language == 'cpp':
+                null_value = '{}'  # Empty initializer list for C++
+            else:
+                null_value = 'null'
+            
+            test_code = lang_config['template'].format(
                 user_code=clean_code,
-                test_input='0'  # Dummy input that should compile
+                test_input=null_value,
+                func_name='test_function'
             )
         
-        # Execute compilation via Piston API
-        piston_request = {
-            'language': config['lang'],
-            'version': config['version'],
-            'files': [{'name': config['filename'], 'content': test_code}],
-            'compile_timeout': 10000,  # 10 seconds
-            'run_timeout': 0,  # Don't run, just compile
-            'compile_memory_limit': -1,
-            'run_memory_limit': -1
+        # Execute the code
+        data = {
+            'language': lang_config['lang'],
+            'version': lang_config['version'],
+            'files': [{
+                'name': lang_config['filename'],
+                'content': test_code
+            }]
         }
         
         response = requests.post(
-            f'{PISTON_API}/execute',
-            headers={'Content-Type': 'application/json'},
-            json=piston_request,
-            timeout=15
+            f"{PISTON_API}/execute",
+            json=data,
+            timeout=10  # Add timeout
         )
         
         if response.status_code == 200:
             result = response.json()
-            compile_error = result.get('compile', {}).get('stderr', '')
             
-            # For interpreted languages, runtime errors during parsing are compilation errors
-            if language in ['python', 'javascript']:
-                compile_error = compile_error or result.get('run', {}).get('stderr', '')
+            # Check for compilation errors
+            if result.get('compile') and result['compile'].get('stderr'):
+                return {
+                    'success': True,
+                    'compiles': False,
+                    'error': result['compile']['stderr']
+                }
             
+            # If we get here, it compiled successfully
             return {
                 'success': True,
-                'compiles': not bool(compile_error),
-                'error': compile_error
+                'compiles': True,
+                'message': 'Code compiles successfully'
             }
         else:
             return {
                 'success': False,
                 'compiles': False,
-                'error': f'Compilation check failed: {response.status_code}'
+                'error': f'Piston API error: {response.status_code}'
             }
             
     except Exception as e:
         return {
             'success': False,
             'compiles': False,
-            'error': str(e)
+            'error': f'Compilation check failed: {str(e)}'
         }
 
 def extract_function_name(code, language):
     """Extract the main function name from code"""
-    patterns = {
-        'python': r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
-        'javascript': r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
-        'java': r'public\s+static\s+\w+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
-        'cpp': r'\w+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\('
-    }
-    if language not in patterns:
+    try:
+        patterns = {
+            'python': r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'javascript': r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'java': r'public\s+static\s+(?:int|void|boolean|String|long|double|float)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'cpp': r'(?:int|void|bool|long|double|float|string)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*\{'
+        }
+        
+        if language not in patterns:
+            print(f"Warning: Unsupported language for function extraction: {language}")
+            return None
+            
+        pattern = patterns[language]
+        matches = re.findall(pattern, code, re.MULTILINE)
+        
+        if matches:
+            # Return the first function found
+            func_name = matches[0]
+            print(f"Extracted function name '{func_name}' for {language}")
+            return func_name
+        else:
+            print(f"No function found in {language} code using pattern: {pattern}")
+            print(f"Code preview: {code[:200]}...")
+            return None
+            
+    except Exception as e:
+        print(f"Error extracting function name for {language}: {e}")
         return None
-    matches = re.findall(patterns[language], code)
-    return matches[0] if matches else None
 
 
 def run_test_validation(code, language, challenge):
@@ -637,14 +717,15 @@ def run_test_validation(code, language, challenge):
     test_results = []
     tests_passed = 0
     total_tests = len(challenge['test_cases']) if 'test_cases' in challenge else 0
-    for test_case in challenge.get('test_cases', []):
+    for i, test_case in enumerate(challenge.get('test_cases', [])):
         result = execute_single_test(
             code=code,
             config=config,
             test_input=test_case['input'],
-            expected=test_case['expected'],
-            test_number=test_case['number'],
-            challenge=challenge
+            expected=test_case.get('expected_output') or test_case.get('expected', ''),
+            test_number=i + 1,
+            challenge=challenge,
+            func_name=func_name  # Pass the already extracted function name
         )
         if result['passed']:
             tests_passed += 1
@@ -659,9 +740,41 @@ def run_test_validation(code, language, challenge):
         'test_results': test_results
     }
 
-def execute_single_test(code, config, test_input, expected, test_number, challenge):
+def convert_input_format(test_input, language):
+    """Convert test input to language-specific format"""
+    try:
+        # Clean the input string
+        test_input = str(test_input).strip()
+        
+        # For most languages, [1,2,3] works fine
+        if language == 'python':
+            return test_input
+            
+        elif language == 'javascript':
+            # JavaScript: convert None to null
+            if test_input.lower() == 'none':
+                return 'null'
+            return test_input
+            
+        elif language == 'java':
+            # Java: convert [1,2,3] to {1,2,3} for array initialization
+            return test_input.replace('[', '{').replace(']', '}')
+            
+        elif language == 'cpp':
+            # C++: convert [1,2,3] to {1,2,3} for vector initialization
+            return test_input.replace('[', '{').replace(']', '}')
+            
+        return test_input
+        
+    except Exception as e:
+        print(f"Error converting input format: {e}")
+        return test_input
+
+def execute_single_test(code, config, test_input, expected, test_number, challenge, func_name):
     """Execute a single test case"""
     try:
+        # No artificial delays - let the system handle rate limiting naturally
+        
         # Get language config
         lang_config = PISTON_LANGUAGES.get(config['lang'])
         if not lang_config:
@@ -673,8 +786,7 @@ def execute_single_test(code, config, test_input, expected, test_number, challen
                 'expected': expected
             }
 
-        # Extract function name
-        func_name = extract_function_name(code, config['lang'])
+        # Function name is now passed as parameter - no need to extract again
         if not func_name:
             return {
                 'test_number': test_number,
@@ -687,12 +799,17 @@ def execute_single_test(code, config, test_input, expected, test_number, challen
         # Clean user code by removing any existing main/test functions
         clean_code = clean_user_code(code, config['lang'])
         
+        # Convert input format for the specific language
+        converted_input = convert_input_format(test_input, config['lang'])
+        
         # Prepare test code using template
         test_code = lang_config['template'].format(
             func_name=func_name,
             user_code=clean_code,
-            test_input=test_input
+            test_input=converted_input
         )
+        
+        # Removed debug output for performance
         
         # Execute via Piston API
         piston_request = {
@@ -711,19 +828,65 @@ def execute_single_test(code, config, test_input, expected, test_number, challen
             'run_memory_limit': -1  # No limit
         }
         
-        response = requests.post(
-            f'{PISTON_API}/execute',
-            headers={'Content-Type': 'application/json'},
-            json=piston_request,
-            timeout=15
-        )
+        # Execute with minimal retry logic for critical failures only
+        import time
+        max_retries = 2  # Reduced from 3
+        base_delay = 0.5  # Reduced from 1 second
         
-        if response.status_code != 200:
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f'{PISTON_API}/execute',
+                    headers={'Content-Type': 'application/json'},
+                    json=piston_request,
+                    timeout=8  # Reduced from 10
+                )
+                
+                if response.status_code == 200:
+                    break  # Success, exit retry loop
+                elif response.status_code == 429:  # Rate limit
+                    if attempt < max_retries - 1:  # Not the last attempt
+                        delay = base_delay * (1.5 ** attempt)  # Gentler backoff: 0.5s, 0.75s
+                        print(f"Rate limited (429), retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        return {
+                            'test_number': test_number,
+                            'passed': False,
+                            'error': 'Rate limit exceeded. Please try again in a few moments.',
+                            'output': 'Rate Limited',
+                            'expected': expected
+                        }
+                else:
+                    return {
+                        'test_number': test_number,
+                        'passed': False,
+                        'error': f'API Error: {response.status_code}',
+                        'output': f'Error {response.status_code}',
+                        'expected': expected
+                    }
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (1.5 ** attempt)  # Gentler backoff
+                    print(f"Request failed: {e}, retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+                else:
+                    return {
+                        'test_number': test_number,
+                        'passed': False,
+                        'error': f'Network error: {str(e)}',
+                        'output': 'Network Error',
+                        'expected': expected
+                    }
+        else:
+            # This should not happen, but just in case
             return {
                 'test_number': test_number,
                 'passed': False,
-                'error': f'Execution failed: {response.status_code}',
-                'output': None,
+                'error': 'Max retries exceeded',
+                'output': 'Max Retries Exceeded',
                 'expected': expected
             }
             
@@ -781,31 +944,78 @@ def compare_outputs(actual, expected, comparison_type='exact'):
         return False
 
 def clean_user_code(code, language):
-    """Remove main function and test-related code from user code"""
+    """Remove main function and test-related code from user code while preserving imports"""
     if language == 'python':
-        # Remove any existing test code
+        # Split into lines and filter out test-related code, but preserve imports
         lines = code.split('\n')
-        clean_lines = [
-            line for line in lines 
-            if not any(x in line.lower() for x in ['test_input', 'print(', '#test'])
-        ]
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Skip test-related lines but preserve imports and function definitions
+            if not any(x in line_lower for x in ['test_input', 'print(result)', 'print(', '#test']):
+                # Allow import statements and function definitions
+                if (line_lower.startswith('import ') or 
+                    line_lower.startswith('from ') or 
+                    line_lower.startswith('def ') or 
+                    line.strip() == '' or
+                    not line_lower.startswith('print(') and 'test_input' not in line_lower):
+                    clean_lines.append(line)
         return '\n'.join(clean_lines)
     elif language == 'javascript':
-        # Remove any existing test code
+        # Remove test-related code but preserve utility functions and imports
         lines = code.split('\n')
-        clean_lines = [
-            line for line in lines 
-            if not any(x in line.lower() for x in ['test_input', 'console.log(', '//test'])
-        ]
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Skip test-related lines but preserve function definitions and utility code
+            if not any(x in line_lower for x in ['test_input', 'console.log(result)', '//test']):
+                # Allow const, function definitions, and other non-test code
+                if (line_lower.startswith('const ') or 
+                    line_lower.startswith('function ') or 
+                    line_lower.startswith('let ') or 
+                    line_lower.startswith('var ') or
+                    line.strip() == '' or
+                    'test_input' not in line_lower and 'console.log(' not in line_lower):
+                    clean_lines.append(line)
         return '\n'.join(clean_lines)
     elif language == 'java':
-        # Remove main method and test code
-        code = re.sub(r'public\s+static\s+void\s+main\s*\([^)]*\)\s*{[^}]*}', '', code)
-        return code
+        # Remove main method and test code but preserve imports and class structure
+        # First remove main method
+        code = re.sub(r'public\s+static\s+void\s+main\s*\([^)]*\)\s*\{[^}]*\}', '', code, flags=re.DOTALL)
+        # Remove test-related lines but preserve imports
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if not any(x in line_lower for x in ['test_input', 'system.out.println(result)', '//test']):
+                # Allow imports, class definitions, and method definitions
+                if (line_lower.startswith('import ') or 
+                    line_lower.startswith('public class') or 
+                    line_lower.startswith('public static') or 
+                    line_lower.startswith('private') or
+                    line.strip() == '' or
+                    'test_input' not in line_lower):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
     elif language == 'cpp':
-        # Remove main function and test code
-        code = re.sub(r'int\s+main\s*\([^)]*\)\s*{[^}]*}', '', code)
-        return code
+        # Remove main function and test code but preserve includes and function definitions
+        # First remove main function
+        code = re.sub(r'int\s+main\s*\([^)]*\)\s*\{[^}]*\}', '', code, flags=re.DOTALL)
+        # Remove test-related lines but preserve includes and typedefs
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if not any(x in line_lower for x in ['test_input', 'cout << result', '//test']):
+                # Allow includes, using statements, typedefs, defines, and function definitions
+                if (line_lower.startswith('#include') or 
+                    line_lower.startswith('using ') or 
+                    line_lower.startswith('typedef') or 
+                    line_lower.startswith('#define') or 
+                    line.strip() == '' or
+                    ('test_input' not in line_lower and 'cout <<' not in line_lower)):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
     return code
 
 @app.route('/api/user/<username>')
