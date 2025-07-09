@@ -152,22 +152,64 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Language template code
     const codeTemplates = {
-        python: `def function_name(parameter):
+        python: `import sys
+import math
+import collections
+from collections import defaultdict, deque, Counter
+import heapq
+import bisect
+import itertools
+import functools
+from functools import lru_cache
+import re
+import string
+
+def function_name(parameter):
     # Bug: Add your buggy code here
     pass`,
-        javascript: `function functionName(parameter) {
+        javascript: `// Common utility functions
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+const lcm = (a, b) => (a * b) / gcd(a, b);
+const isPrime = (n) => { if (n < 2) return false; for (let i = 2; i <= Math.sqrt(n); i++) if (n % i === 0) return false; return true; };
+const factorial = (n) => n <= 1 ? 1 : n * factorial(n - 1);
+
+function functionName(parameter) {
     // Bug: Add your buggy code here
     return null;
 }`,
-        java: `public class ClassName {
+        java: `import java.util.*;
+import java.util.stream.*;
+import java.io.*;
+import java.math.*;
+import java.text.*;
+import java.lang.*;
+
+public class ClassName {
     public static int functionName(int[] parameter) {
         // Bug: Add your buggy code here
         return 0;
     }
 }`,
-        cpp: `#include <iostream>
-#include <vector>
+        cpp: `#include <bits/stdc++.h>
 using namespace std;
+
+// Common typedefs for competitive programming
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int, int> pii;
+typedef pair<ll, ll> pll;
+typedef vector<int> vi;
+typedef vector<ll> vll;
+typedef vector<pii> vpii;
+typedef vector<string> vs;
+
+// Common macros
+#define all(x) (x).begin(), (x).end()
+#define sz(x) (int)(x).size()
+#define pb push_back
+#define mp make_pair
+#define fi first
+#define se second
 
 int functionName(vector<int> parameter) {
     // Bug: Add your buggy code here
@@ -349,13 +391,21 @@ function initTestCaseNavigation() {
 function updateActiveTestCaseButton() {
     const testCaseButtons = document.querySelectorAll('.test-case-btn');
     testCaseButtons.forEach((btn, index) => {
+        // Clear all status classes
         btn.classList.remove('active', 'passed', 'failed', 'pending');
+        
+        // Always add result status if available (regardless of active state)
+        if (testResults[index]) {
+            if (testResults[index].passed) {
+                btn.classList.add('passed');
+            } else {
+                btn.classList.add('failed');
+            }
+        }
+        
+        // Add active class on top of status class
         if (index === currentTestCase) {
             btn.classList.add('active');
-        }
-        // Add result status if available
-        if (testResults[index]) {
-            btn.classList.add(testResults[index].passed ? 'passed' : 'failed');
         }
     });
 
@@ -403,32 +453,35 @@ function showTestCase(index, context = 'main') {
         
         // Display actual output if test has been run
         if (testResults && testResults[index]) {
-            actualOutputSection.style.display = 'block';
-            const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
-            testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
-            
-            // Update result badge with detailed feedback
-            if (testResults[index].passed) {
-                testResultBadge.innerHTML = '<i class="fas fa-check"></i> Test Case ' + (index + 1) + ' Passed';
-                testResultBadge.className = 'badge success';
+            // Check if test is currently running
+            if (testResults[index].status === 'running') {
+                actualOutputSection.style.display = 'none';
+                testResultBadge.innerHTML = 'running';
+                testResultBadge.className = 'test-result-badge running';
             } else {
-                const isHidden = testCase.hidden;
-                const failMessage = isHidden ? 
-                    'Hidden Test Case ' + (index + 1) + ' Failed' :
-                    'Test Case ' + (index + 1) + ' Failed';
-                testResultBadge.innerHTML = `<i class="fas fa-times"></i> ${failMessage}`;
-                testResultBadge.className = 'badge error';
-                if (testResults[index].error) {
-                    testActualDisplay.innerHTML += `<pre class="error">${testResults[index].error}</pre>`;
-                }
-                if (!isHidden) {
-                    testActualDisplay.innerHTML += `<pre class="error">Expected: ${expectedOutput}\nActual: ${actualOutput}</pre>`;
+                actualOutputSection.style.display = 'block';
+                const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+                testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
+                
+                // Update result badge with simple status
+                if (testResults[index].passed) {
+                    testResultBadge.innerHTML = 'passed';
+                    testResultBadge.className = 'test-result-badge passed';
+                } else {
+                    testResultBadge.innerHTML = 'failed';
+                    testResultBadge.className = 'test-result-badge failed';
+                    if (testResults[index].error) {
+                        testActualDisplay.innerHTML += `<pre class="error">${testResults[index].error}</pre>`;
+                    }
+                    if (!testCase.hidden) {
+                        testActualDisplay.innerHTML += `<pre class="error">Expected: ${expectedOutput}\nActual: ${actualOutput}</pre>`;
+                    }
                 }
             }
         } else {
             actualOutputSection.style.display = 'none';
-            testResultBadge.innerHTML = '<i class="fas fa-minus"></i> Test Case ' + (index + 1) + ' Not Run';
-            testResultBadge.className = 'badge';
+            testResultBadge.innerHTML = 'not run';
+            testResultBadge.className = 'test-result-badge not-tested';
         }
     }
 }
@@ -960,19 +1013,16 @@ async function submitSolution() {
             const data = await response.json();
             console.log('Submission results:', data);
 
-            // Process visible test results first with delay
+            // Process visible test results immediately  
             if (data.visible_results && data.visible_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Visible Tests...';
                 for (let i = 0; i < data.visible_results.test_results.length; i++) {
                     testResults[i] = data.visible_results.test_results[i];
                     showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
                 }
             }
 
-            // Process hidden test results
+            // Process hidden test results immediately
             if (data.hidden_results && data.hidden_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Hidden Tests...';
                 const startIndex = testResults.length;
                 for (let i = 0; i < data.hidden_results.test_results.length; i++) {
                     const result = data.hidden_results.test_results[i];
@@ -982,7 +1032,6 @@ async function submitSolution() {
                         error: result.error || (result.passed ? null : 'Hidden test case failed')
                     };
                     showTestCase(startIndex + i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
                 }
             }
 
@@ -1208,18 +1257,18 @@ async function runTests() {
             return;
         }
 
-        // Initialize test results
+        // Initialize test results - don't show UI until results are ready
         testResults = [];
-        // Show initial state for all test cases
         if (!testCases || !Array.isArray(testCases)) {
             showResultsNotification('Error', 'No test cases available', 'error');
             return;
         }
 
-        testCases.forEach((_, index) => {
-            testResults[index] = { status: 'running' };
-            showTestCase(index);
-        });
+        // Hide test status until results are available
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
 
         // Update button state
         if (runBtn) {
@@ -1257,13 +1306,16 @@ async function runTests() {
                 // Ensure test_results exists and is an array
                 const testResultsArray = Array.isArray(data.test_results) ? data.test_results : [];
                 
-                // Process test results one by one with a small delay for visual feedback
-                for (let i = 0; i < testResultsArray.length; i++) {
-                    testResults[i] = testResultsArray[i];
-                    showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                // Process all test results at once for better performance
+                testResults = testResultsArray;
+                
+                // Show test status now that results are available
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'block';
                 }
                 
+                // Update UI with all results
                 updateTestResults();
                 
                 // Show success/failure message
@@ -1279,11 +1331,22 @@ async function runTests() {
                 }
             } else {
                 testResults = [];  // Reset test results on error
+                // Hide test status on error
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
                 updateTestResults();
                 showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
             }
         } catch (error) {
             if (error.name === 'AbortError') {
+                testResults = [];
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
+                updateTestResults();
                 showResultsNotification('Error', 'Test execution timed out. Please try again.', 'error');
             } else {
                 throw error;
@@ -1293,6 +1356,11 @@ async function runTests() {
     } catch (error) {
         console.error('Error running tests:', error);
         testResults = [];  // Reset test results on error
+        // Hide test status on error
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
         updateTestResults();
         showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
     } finally {
@@ -1307,10 +1375,24 @@ function updateTestResults() {
         testResults = [];  // Initialize if undefined
     }
     
-    // Update test panel for each test case
-    testCases.forEach((_, index) => {
-        showTestCase(index);
-    });
+    // Update test case buttons to show their status immediately
+    updateActiveTestCaseButton();
+    
+    // Find the first failed test case
+    let firstFailedIndex = -1;
+    for (let i = 0; i < testResults.length; i++) {
+        if (testResults[i] && !testResults[i].passed) {
+            firstFailedIndex = i;
+            break;
+        }
+    }
+    
+    // If there are failed tests, automatically navigate to the first failed test
+    if (firstFailedIndex !== -1) {
+        currentTestCase = firstFailedIndex;
+        showTestCase(currentTestCase);
+        updateActiveTestCaseButton();
+    }
     
     // Update overall test status
     const passedTests = testResults.filter(result => result && result.passed).length;

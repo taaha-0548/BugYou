@@ -560,6 +560,19 @@ body {
     color: white;
 }
 
+/* Failed status takes precedence over active state */
+.test-case-btn.failed.active {
+    background-color: #EF4444;
+    border-color: #EF4444;
+    color: white;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+/* Passed status when active gets a slight glow */
+.test-case-btn.passed.active {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+}
+
 .test-case-btn.pending {
     background-color: #F59E0B;
     border-color: #F59E0B;
@@ -623,6 +636,11 @@ body {
 
 .test-result-badge.not-tested {
     background-color: #666666;
+    color: white;
+}
+
+.test-result-badge.running {
+    background-color: #3B82F6;
     color: white;
 }
 
