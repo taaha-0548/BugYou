@@ -1,0 +1,67 @@
+<!-- templates/signup.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BugYou - Sign Up</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <!-- Static CSS via Flask -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='signup/signup.css') }}" />
+</head>
+
+<body>
+  <!-- Background Video -->
+  <video autoplay muted loop id="bg-video">
+    <source src="{{ url_for('static', filename='assets/login.mp4') }}" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+
+  <div class="overlay">
+    <header class="navbar">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="BugYou Logo" />
+        BugYou
+      </div>
+      <nav>
+        <a href="#">About us</a>
+        <a href="#">Guide</a>
+        <a href="#">Contact</a>
+      </nav>
+    </header>
+
+    <main class="content">
+      <div class="left">
+        <h1 id="typewriter-text" class="typewriter-line"></h1>
+        <p class="glitch-text" data-text="Upskill your programming skills and compete against others ">
+          Upskill your programming skills and compete against others
+        </p>
+        <br>
+        <p class="single-line-text">
+          Already have an account? <a href="{{ url_for('login') }}" class="login-link">Login.</a>
+        </p>
+      </div>
+
+      <div class="right">
+        <form method="POST" class="signup-form">
+          {{ form.hidden_tag() }}
+          <h2>Sign up</h2>
+
+          {{ form.email(class="input", placeholder="Email address") }}
+          {{ form.username(class="input", placeholder="Username") }}
+          {{ form.fullname(class="input", placeholder="Full Name") }}
+          {{ form.password(class="input", placeholder="Password") }}
+
+          <button type="submit">{{ form.submit.label.text }} →</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- JS -->
+  <script src="{{ url_for('static', filename='signup/signup.js') }}"></script>
+</body>
+</html>

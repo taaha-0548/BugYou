@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BugYou - Login</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <!-- Static CSS via Flask -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='login/login.css') }}" />
+</head>
+
+<body>
+  <!-- Background Video -->
+  <video autoplay muted loop id="bg-video">
+    <source src="{{ url_for('static', filename='assets/login.mp4') }}" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+
+  <!-- Page Overlay -->
+  <div class="overlay">
+    <header class="navbar">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="BugYou Logo" />
+        BugYou
+      </div>
+      <nav>
+        <a href="#">About us</a>
+        <a href="#">Guide</a>
+        <a href="#">Contact</a>
+      </nav>
+    </header>
+
+    <main class="content">
+      <div class="left">
+        <h1 id="typewriter-text" class="typewriter-line"></h1>
+        <p class="glitch-text" data-text="Ready to hunt some bugs?">Ready to hunt some bugs?</p>
+        <p>New to BugYou? <a href="/register" class="login-link">Create an account.</a></p>
+      </div>
+
+      <div class="right">
+        <form method="POST" class="login-form">
+          {{ form.hidden_tag() }}
+          <h2>Login</h2>
+          {{ form.username(class="input", placeholder="Username") }}
+          {{ form.password(class="input", placeholder="Password") }}
+          <button type="submit">{{ form.submit.label.text }} →</button>
+          <div class="remember-me">
+            <input type="checkbox" id="remember-me" />
+            <label for="remember-me">Remember me</label>
+          </div>
+          <p class="forgot-password"><a href="#">Forgot password?</a></p>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Static JS via Flask -->
+  <script src="{{ url_for('static', filename='login/login.js') }}"></script>
+</body>
+</html>
