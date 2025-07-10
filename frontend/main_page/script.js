@@ -24,14 +24,13 @@ let testResults = [];
 let challengeHints = []; // Array of hints for the current challenge
 let revealedHints = [];  // Indices of revealed hints (reset on new challenge)
 
-// Cache for API responses
+// Enhanced cache for API responses
 const apiCache = new Map();
-const API_CACHE_DURATION = 5000; // 5 seconds
+const API_CACHE_DURATION = 10000; // 10 seconds (increased for better performance)
 
-// Add cache busting parameter to API calls
+// Clean API URLs - no cache busting for better backend caching
 function getApiUrl(endpoint) {
-    const timestamp = new Date().getTime();
-    return `${API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}_=${timestamp}`;
+    return `${API_BASE}${endpoint}`;
 }
 
 // Optimized API call function with caching
@@ -1270,9 +1269,10 @@ async function runTests() {
             testStatusElement.style.display = 'none';
         }
 
-        // Update button state
+        // Update button state with better messaging
         if (runBtn) {
-            runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            const testCount = testCases.length;
+            runBtn.innerHTML = `<i class="fas fa-rocket fa-spin"></i> Running ${testCount} tests (batch mode)...`;
             runBtn.disabled = true;
         }
 
@@ -1283,9 +1283,9 @@ async function runTests() {
             test_cases: testCases
         };
 
-        // Execute tests with timeout
+        // Execute tests with optimized timeout for batch execution
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for batch processing
 
         try {
             const response = await fetch(getApiUrl('/execute'), {
@@ -1347,7 +1347,7 @@ async function runTests() {
                     testStatusElement.style.display = 'none';
                 }
                 updateTestResults();
-                showResultsNotification('Error', 'Test execution timed out. Please try again.', 'error');
+                showResultsNotification('Timeout', 'Test execution took longer than expected. This might be due to network issues or complex test cases. Please try again.', 'error');
             } else {
                 throw error;
             }
