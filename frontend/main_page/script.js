@@ -20,18 +20,29 @@ let currentTestCase = 0;
 let testCases = [];
 let testResults = [];
 
+// Optimization: Cache visible test results to avoid re-running
+let lastRunCode = '';
+let lastRunResults = [];
+let lastRunAllPassed = false;
+
+// Helper function to clear cached test results
+function clearCachedTestResults() {
+    lastRunCode = '';
+    lastRunResults = [];
+    lastRunAllPassed = false;
+}
+
 // --- HINTS FEATURE STATE ---
 let challengeHints = []; // Array of hints for the current challenge
 let revealedHints = [];  // Indices of revealed hints (reset on new challenge)
 
-// Cache for API responses
+// Enhanced cache for API responses
 const apiCache = new Map();
-const API_CACHE_DURATION = 5000; // 5 seconds
+const API_CACHE_DURATION = 10000; // 10 seconds (increased for better performance)
 
-// Add cache busting parameter to API calls
+// Clean API URLs - no cache busting for better backend caching
 function getApiUrl(endpoint) {
-    const timestamp = new Date().getTime();
-    return `${API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}_=${timestamp}`;
+    return `${API_BASE}${endpoint}`;
 }
 
 // Optimized API call function with caching
@@ -152,22 +163,64 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Language template code
     const codeTemplates = {
-        python: `def function_name(parameter):
+        python: `import sys
+import math
+import collections
+from collections import defaultdict, deque, Counter
+import heapq
+import bisect
+import itertools
+import functools
+from functools import lru_cache
+import re
+import string
+
+def function_name(parameter):
     # Bug: Add your buggy code here
     pass`,
-        javascript: `function functionName(parameter) {
+        javascript: `// Common utility functions
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+const lcm = (a, b) => (a * b) / gcd(a, b);
+const isPrime = (n) => { if (n < 2) return false; for (let i = 2; i <= Math.sqrt(n); i++) if (n % i === 0) return false; return true; };
+const factorial = (n) => n <= 1 ? 1 : n * factorial(n - 1);
+
+function functionName(parameter) {
     // Bug: Add your buggy code here
     return null;
 }`,
-        java: `public class ClassName {
+        java: `import java.util.*;
+import java.util.stream.*;
+import java.io.*;
+import java.math.*;
+import java.text.*;
+import java.lang.*;
+
+public class ClassName {
     public static int functionName(int[] parameter) {
         // Bug: Add your buggy code here
         return 0;
     }
 }`,
-        cpp: `#include <iostream>
-#include <vector>
+        cpp: `#include <bits/stdc++.h>
 using namespace std;
+
+// Common typedefs for competitive programming
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int, int> pii;
+typedef pair<ll, ll> pll;
+typedef vector<int> vi;
+typedef vector<ll> vll;
+typedef vector<pii> vpii;
+typedef vector<string> vs;
+
+// Common macros
+#define all(x) (x).begin(), (x).end()
+#define sz(x) (int)(x).size()
+#define pb push_back
+#define mp make_pair
+#define fi first
+#define se second
 
 int functionName(vector<int> parameter) {
     // Bug: Add your buggy code here
@@ -307,6 +360,13 @@ function initEditor() {
     });
 
     editor.setValue('// Loading challenge from database...');
+    
+    // Clear cached test results when code changes (debounced to avoid excessive calls)
+    const debouncedClearCache = debounce(() => {
+        clearCachedTestResults();
+    }, 1000); // Clear cache 1 second after user stops typing
+    
+    editor.on('change', debouncedClearCache);
 }
 
 // Initialize count-up timer
@@ -349,13 +409,21 @@ function initTestCaseNavigation() {
 function updateActiveTestCaseButton() {
     const testCaseButtons = document.querySelectorAll('.test-case-btn');
     testCaseButtons.forEach((btn, index) => {
-        btn.classList.remove('active', 'passed', 'failed', 'pending');
+        // Clear all status classes
+        btn.classList.remove('active', 'passed', 'failed');
+        
+        // Only add result status if test is completed (not running)
+        if (testResults[index] && testResults[index].status !== 'running') {
+            if (testResults[index].passed) {
+                btn.classList.add('passed');
+            } else {
+                btn.classList.add('failed');
+            }
+        }
+        
+        // Add active class on top of status class
         if (index === currentTestCase) {
             btn.classList.add('active');
-        }
-        // Add result status if available
-        if (testResults[index]) {
-            btn.classList.add(testResults[index].passed ? 'passed' : 'failed');
         }
     });
 
@@ -401,34 +469,28 @@ function showTestCase(index, context = 'main') {
         const expectedOutput = testCase.expected_output || testCase.expected;
         testExpectedDisplay.innerHTML = `<pre>${expectedOutput}</pre>`;
         
-        // Display actual output if test has been run
-        if (testResults && testResults[index]) {
+        // Display actual output if test has been run and completed
+        if (testResults && testResults[index] && testResults[index].status !== 'running') {
             actualOutputSection.style.display = 'block';
             const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
             testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
             
-            // Update result badge with detailed feedback
+            // Update result badge with simple status
             if (testResults[index].passed) {
-                testResultBadge.innerHTML = '<i class="fas fa-check"></i> Test Case ' + (index + 1) + ' Passed';
-                testResultBadge.className = 'badge success';
+                testResultBadge.innerHTML = 'passed';
+                testResultBadge.className = 'test-result-badge passed';
             } else {
-                const isHidden = testCase.hidden;
-                const failMessage = isHidden ? 
-                    'Hidden Test Case ' + (index + 1) + ' Failed' :
-                    'Test Case ' + (index + 1) + ' Failed';
-                testResultBadge.innerHTML = `<i class="fas fa-times"></i> ${failMessage}`;
-                testResultBadge.className = 'badge error';
-                if (testResults[index].error) {
-                    testActualDisplay.innerHTML += `<pre class="error">${testResults[index].error}</pre>`;
-                }
-                if (!isHidden) {
+                testResultBadge.innerHTML = 'failed';
+                testResultBadge.className = 'test-result-badge failed';
+                // Don't show error messages in the output section - only show the comparison
+                if (!testCase.hidden) {
                     testActualDisplay.innerHTML += `<pre class="error">Expected: ${expectedOutput}\nActual: ${actualOutput}</pre>`;
                 }
             }
         } else {
             actualOutputSection.style.display = 'none';
-            testResultBadge.innerHTML = '<i class="fas fa-minus"></i> Test Case ' + (index + 1) + ' Not Run';
-            testResultBadge.className = 'badge';
+            testResultBadge.innerHTML = 'not run';
+            testResultBadge.className = 'test-result-badge not-tested';
         }
     }
 }
@@ -933,15 +995,38 @@ async function submitSolution() {
         }
 
         const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+        
+        // Check if we can skip visible tests (optimization)
+        const canSkipVisibleTests = (
+            lastRunAllPassed &&
+            lastRunCode === code &&
+            lastRunResults.length > 0
+        );
+        
+        if (canSkipVisibleTests) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            // Use cached visible results, only show hidden tests as running
+            testResults = [...lastRunResults]; // Copy cached visible results
+            // Add running status for hidden tests that will be run
+            const hiddenTestCount = (currentChallenge.test_cases?.filter(tc => tc.hidden) || []).length;
+            for (let i = testResults.length; i < testResults.length + hiddenTestCount; i++) {
+                testResults[i] = { status: 'running' };
+            }
+            // Update button colors to show current state (cached visible + running hidden)
+            updateActiveTestCaseButton();
+        } else {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            // Initialize test results and show running state
+            testResults = [];
+            testCases.forEach((_, index) => {
+                testResults[index] = { status: 'running' };
+                showTestCase(index);
+            });
+            // Update button colors (will show no status while running)
+            updateActiveTestCaseButton();
+        }
+        
         submitBtn.disabled = true;
-
-        // Initialize test results and show running state
-        testResults = [];
-        testCases.forEach((_, index) => {
-            testResults[index] = { status: 'running' };
-            showTestCase(index);
-        });
 
         try {
             const response = await fetch(getApiUrl('/validate'), {
@@ -953,26 +1038,25 @@ async function submitSolution() {
                     code: code,
                     language: currentLanguage,
                     challenge_id: currentChallenge.challenge_id,
-                    difficulty: currentChallenge.difficulty
+                    difficulty: currentChallenge.difficulty,
+                    skip_visible_tests: canSkipVisibleTests, // Tell backend to skip visible tests
+                    cached_visible_results: canSkipVisibleTests ? lastRunResults : undefined
                 })
             });
 
             const data = await response.json();
             console.log('Submission results:', data);
 
-            // Process visible test results first with delay
-            if (data.visible_results && data.visible_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Visible Tests...';
+            // Process visible test results immediately (unless we skipped them)
+            if (data.visible_results && data.visible_results.test_results && !canSkipVisibleTests) {
                 for (let i = 0; i < data.visible_results.test_results.length; i++) {
                     testResults[i] = data.visible_results.test_results[i];
                     showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
                 }
             }
 
-            // Process hidden test results
+            // Process hidden test results immediately
             if (data.hidden_results && data.hidden_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Hidden Tests...';
                 const startIndex = testResults.length;
                 for (let i = 0; i < data.hidden_results.test_results.length; i++) {
                     const result = data.hidden_results.test_results[i];
@@ -982,7 +1066,6 @@ async function submitSolution() {
                         error: result.error || (result.passed ? null : 'Hidden test case failed')
                     };
                     showTestCase(startIndex + i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
                 }
             }
 
@@ -1008,6 +1091,13 @@ async function submitSolution() {
                         'Your code passed all visible test cases but failed some hidden test cases. Try to make your solution more robust!' :
                         'Some test cases failed. Please check the results and try again.';
                     showResultsNotification('Warning', message, 'warning');
+                } else if (data.phase === 'COMPILATION') {
+                    // Special handling for compilation errors
+                    showResultsNotification(
+                        'Error In Compilation',
+                        data.error || 'Your code has syntax or indentation errors that prevent compilation.',
+                        'compilation'
+                    );
                 } else {
                     showResultsNotification(
                         'Error',
@@ -1039,7 +1129,20 @@ async function submitSolution() {
 // Update loadCurrentChallenge to use correct API endpoint
 async function loadCurrentChallenge() {
     try {
-        const data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
+        // First try to load the specific challenge ID
+        let data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
+        
+        // If specific challenge not found, fall back to first available challenge
+        if (!data.success) {
+            console.log(`Challenge ${currentChallengeId} not found, loading first available challenge...`);
+            data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/first`);
+            
+            // Update currentChallengeId to match the actually loaded challenge
+            if (data.success && data.challenge) {
+                currentChallengeId = data.challenge.challenge_id;
+                console.log(`Loaded first available challenge: ${currentChallengeId}`);
+            }
+        }
         
         if (data.success) {
             currentChallenge = data.challenge;
@@ -1054,6 +1157,9 @@ async function loadCurrentChallenge() {
             attempts = 0;
             startTime = Date.now();
             
+            // Clear cached test results for new challenge
+            clearCachedTestResults();
+            
             updateChallengeDisplay();
             updateScore();
             
@@ -1065,7 +1171,7 @@ async function loadCurrentChallenge() {
             }
             
         } else {
-            throw new Error(data.error);
+            throw new Error(data.error || 'No challenges available');
         }
         
     } catch (error) {
@@ -1208,22 +1314,31 @@ async function runTests() {
             return;
         }
 
-        // Initialize test results
+        // Initialize test results - set all to running state
         testResults = [];
-        // Show initial state for all test cases
         if (!testCases || !Array.isArray(testCases)) {
             showResultsNotification('Error', 'No test cases available', 'error');
             return;
         }
 
+        // Set all test cases to running state
         testCases.forEach((_, index) => {
             testResults[index] = { status: 'running' };
-            showTestCase(index);
         });
+        
+        // Update button colors (will show no status while running)
+        updateActiveTestCaseButton();
 
-        // Update button state
+        // Hide test status until results are available
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
+
+        // Update button state with better messaging
         if (runBtn) {
-            runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            const testCount = testCases.length;
+            runBtn.innerHTML = `<i class="fas fa-rocket fa-spin"></i> Running ${testCount} tests (batch mode)...`;
             runBtn.disabled = true;
         }
 
@@ -1234,9 +1349,9 @@ async function runTests() {
             test_cases: testCases
         };
 
-        // Execute tests with timeout
+        // Execute tests with optimized timeout for batch execution
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for batch processing
 
         try {
             const response = await fetch(getApiUrl('/execute'), {
@@ -1257,20 +1372,27 @@ async function runTests() {
                 // Ensure test_results exists and is an array
                 const testResultsArray = Array.isArray(data.test_results) ? data.test_results : [];
                 
-                // Process test results one by one with a small delay for visual feedback
-                for (let i = 0; i < testResultsArray.length; i++) {
-                    testResults[i] = testResultsArray[i];
-                    showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                // Process all test results at once for better performance
+                testResults = testResultsArray;
+                
+                // Cache results for optimization (for submitSolution)
+                lastRunCode = code;
+                lastRunResults = [...testResultsArray]; // Deep copy
+                const testsPassedCount = data.tests_passed || 0;
+                const totalTestsCount = data.total_tests || testResultsArray.length;
+                lastRunAllPassed = (testsPassedCount === totalTestsCount);
+                
+                // Show test status now that results are available
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'block';
                 }
                 
+                // Update UI with all results
                 updateTestResults();
                 
                 // Show success/failure message
-                const testsPassedCount = data.tests_passed || 0;
-                const totalTestsCount = data.total_tests || testResultsArray.length;
-                
-                if (testsPassedCount === totalTestsCount) {
+                if (lastRunAllPassed) {
                     showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
                 } else {
                     const failedTests = totalTestsCount - testsPassedCount;
@@ -1279,12 +1401,29 @@ async function runTests() {
                 }
             } else {
                 testResults = [];  // Reset test results on error
+                // Hide test status on error
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
                 updateTestResults();
-                showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
+                
+                // Check for compilation errors
+                if (data.phase === 'COMPILATION') {
+                    showResultsNotification('Error In Compilation', data.error || 'Your code has syntax or indentation errors that prevent compilation.', 'compilation');
+                } else {
+                    showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
+                }
             }
         } catch (error) {
             if (error.name === 'AbortError') {
-                showResultsNotification('Error', 'Test execution timed out. Please try again.', 'error');
+                testResults = [];
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
+                updateTestResults();
+                showResultsNotification('Timeout', 'Test execution took longer than expected. This might be due to network issues or complex test cases. Please try again.', 'error');
             } else {
                 throw error;
             }
@@ -1293,6 +1432,11 @@ async function runTests() {
     } catch (error) {
         console.error('Error running tests:', error);
         testResults = [];  // Reset test results on error
+        // Hide test status on error
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
         updateTestResults();
         showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
     } finally {
@@ -1307,10 +1451,24 @@ function updateTestResults() {
         testResults = [];  // Initialize if undefined
     }
     
-    // Update test panel for each test case
-    testCases.forEach((_, index) => {
-        showTestCase(index);
-    });
+    // Update test case buttons to show their status immediately
+    updateActiveTestCaseButton();
+    
+    // Find the first failed test case
+    let firstFailedIndex = -1;
+    for (let i = 0; i < testResults.length; i++) {
+        if (testResults[i] && !testResults[i].passed) {
+            firstFailedIndex = i;
+            break;
+        }
+    }
+    
+    // If there are failed tests, automatically navigate to the first failed test
+    if (firstFailedIndex !== -1) {
+        currentTestCase = firstFailedIndex;
+        showTestCase(currentTestCase);
+        updateActiveTestCaseButton();
+    }
     
     // Update overall test status
     const passedTests = testResults.filter(result => result && result.passed).length;
@@ -1345,6 +1503,9 @@ function changeLanguage(event) {
     attempts = 0;
     startTime = Date.now();
     updateScore();
+    
+    // Clear cached test results when language changes
+    clearCachedTestResults();
     
     loadCurrentChallenge();
 }
