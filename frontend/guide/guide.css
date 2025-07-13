@@ -1,0 +1,187 @@
+/* Reset and base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body, html {
+  font-family: 'Poppins', sans-serif;
+  color: white;
+  background-color: #000;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+.bg-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 120vw;
+  height: 120vh;
+  z-index: 0;
+  background: url('../Assets/about_bg.png') no-repeat center center;
+  background-size: cover;
+  filter: blur(2px) brightness(0.4);
+}
+
+/* Overlay wrapper */
+.overlay {
+  background: rgba(0, 0, 0, 0.5);
+  min-height: 100vh;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* Navbar (unchanged) */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1rem;
+  padding: 1rem 2rem;
+  font-family: 'Pixelify Sans', sans-serif;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.navbar nav a {
+  margin-left: 1.5rem;
+  text-decoration: none;
+  color: white;
+}
+
+.navbar nav a:hover {
+  color: #00ffff;
+  text-shadow: 0 0 8px #00ffff;
+  transform: scale(1.1);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo img {
+  width: 30px;
+  height: 30px;
+}
+
+/* Main guide content */
+.guide-content {
+  max-width: 900px;
+  margin: 4rem auto 2rem auto;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  box-shadow: 0 0 20px rgba(0, 255, 153, 0.15);
+  position: relative;
+  z-index: 2;
+  color: white;
+}
+
+.main-title {
+  font-size: 3rem;
+  text-align: center;
+  color: #00ff99;
+  text-shadow: 0 0 10px #00ff99;
+  margin-bottom: 2rem;
+  font-family: 'Pixelify Sans', cursive;
+}
+
+/* Glitch effect */
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  color: #00ff99;
+  z-index: -1;
+}
+
+.glitch-text::before {
+  animation: glitchTop 2s infinite linear;
+  top: -2px;
+}
+
+.glitch-text::after {
+  animation: glitchBottom 2s infinite linear;
+  top: 2px;
+}
+
+@keyframes glitchTop {
+  0%, 100% { clip-path: inset(0 0 80% 0); }
+  50% { clip-path: inset(0 0 50% 0); }
+}
+
+@keyframes glitchBottom {
+  0%, 100% { clip-path: inset(80% 0 0 0); }
+  50% { clip-path: inset(50% 0 0 0); }
+}
+
+/* Guide content sections */
+.instructions {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 0 20px rgba(0, 255, 153, 0.1);
+}
+
+.instructions h2 {
+  margin-top: 1.5rem;
+  font-size: 1.6rem;
+  color: #00ff99;
+}
+
+.instructions p,
+.instructions li {
+  color: #eee;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.instructions ul {
+  margin-left: 1.5rem;
+  padding-left: 1rem;
+  list-style-type: square;
+}
+
+.instructions ul li {
+  margin-bottom: 0.5rem;
+}
+
+.highlight {
+  color: #00ff99;
+  font-weight: bold;
+}
+
+.example-image {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.example-image img {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(0, 255, 153, 0.3);
+}
+
+.closing {
+  margin-top: 2rem;
+  font-style: italic;
+  font-size: 1rem;
+  color: #ccc;
+}

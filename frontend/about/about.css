@@ -1,0 +1,171 @@
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+body, html {
+  font-family: 'Poppins', sans-serif;
+  color: white;
+  height: 100vh;
+  overflow-x: hidden;
+  background-color: #000;
+}
+
+
+.bg-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 120vw;
+  height: 120vh;
+  z-index: 0;
+  background: url('../Assets/about_bg.png') no-repeat center center;
+  background-size: cover;
+  filter: blur(2px) brightness(0.4);
+}
+
+/* Overlay */
+.overlay {
+  background: rgba(0, 0, 0, 0.5);
+  min-height: 100vh;
+  min-width: 100vw;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+
+
+
+
+.navbar {
+  display: flex;
+    font-family: 'Pixelify Sans', sans-serif;
+
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1rem;
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.4);    
+  backdrop-filter: blur(10px);          
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);}
+.navbar nav a {
+  margin-left: 1.5rem;
+  text-decoration: none;
+  color: white;
+}
+.navbar nav a:hover {
+  color: #00ffff;
+  text-shadow: 0 0 8px #00ffff;
+  transform: scale(1.1);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; 
+}
+
+.logo img{
+  width: 30px;
+  height: 30px;
+}
+
+
+/* Main content */
+.about-content {
+  max-width: 900px;
+  margin: auto;
+  text-align: center;
+}
+
+.main-title {
+  font-size: 3rem;
+  font-family: 'Pixelify Sans', sans-serif;
+  color: #00ff99;
+  text-shadow: 0 0 12px #00ff99;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+/* Glitch text */
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  width: 100%;
+  color: #00ff99;
+  z-index: -1;
+}
+
+.glitch-text::before {
+  animation: glitchTop 2s infinite linear;
+  top: -2px;
+}
+
+.glitch-text::after {
+  animation: glitchBottom 2s infinite linear;
+  top: 2px;
+}
+
+@keyframes glitchTop {
+  0%, 100% { clip-path: inset(0 0 80% 0); }
+  50% { clip-path: inset(0 0 50% 0); }
+}
+
+@keyframes glitchBottom {
+  0%, 100% { clip-path: inset(80% 0 0 0); }
+  50% { clip-path: inset(50% 0 0 0); }
+}
+
+/* Description section */
+.description {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 255, 153, 0.3);
+  padding: 2rem;
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.description p {
+  margin-bottom: 1.5rem;
+  line-height: 1.8;
+  font-size: 1.05rem;
+  color: #e2e2e2;
+}
+
+.description .highlight {
+  color: #00ffcc;
+  font-weight: 600;
+}
+
+.description ul {
+  list-style: none;
+  margin: 1rem 0 2rem;
+  padding-left: 0;
+}
+
+.description ul li {
+  margin-bottom: 0.8rem;
+  padding-left: 1.2rem;
+  position: relative;
+  text-align: left;
+}
+
+.description ul li::before {
+  position: absolute;
+  left: 0;
+}
+
+/* Closing line */
+.description .closing {
+  font-style: italic;
+  font-size: 1.1rem;
+  color: #cccccc;
+}

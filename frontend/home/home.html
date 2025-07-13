@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BugYou - Home</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='home/home.css') }}" />
+</head>
+
+<body>
+  <!-- Background Video -->
+  <video autoplay muted loop id="bg-video">
+    <source src="{{ url_for('static', filename='assets/login.mp4') }}" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+
+  <div class="overlay">
+    <header class="navbar">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="BugYou Logo" />
+        BugYou
+      </div>
+      <nav>
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('guide') }}">Guide</a>        <a href="#">Contact</a>
+      </nav>
+    </header>
+
+    <main class="home-content">
+      <div class="center-box">
+        <h1 class="main-title glitch-text" data-text="Welcome to BugYou">Welcome to BugYou</h1>
+        <p class="subtitle">Sharpen your coding skills and compete.</p>
+
+        <div class="button-group">
+          <a href="{{ url_for('login') }}" class="btn">Login</a>
+          <a href="{{ url_for('register') }}" class="btn outline">Sign Up</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</body>
+</html>

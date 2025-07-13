@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About - BugYou</title>
+
+  <!-- Fonts and CSS -->
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='about/about.css') }}" />
+</head>
+
+<body>
+  <!-- Placeholder background image -->
+  <div class="bg-image"></div>
+
+  <div class="overlay">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="BugYou Logo" />
+        BugYou
+      </div>
+      <nav>
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('guide') }}">Guide</a>
+        <a href="#">Contact</a>
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('login') }}">Login</a>
+        <a href="{{ url_for('register') }}">Sign Up</a>
+      </nav>
+    </header>
+
+    <!-- About Content -->
+    <main class="about-content">
+      <h1 class="main-title glitch-text" data-text="About BugYou">About BugYou</h1>
+
+      <section class="description">
+        <p>
+          <strong>BugYou</strong> is a platform designed for the modern programmer — where <span class="highlight">debugging</span> isn't just a skill, it's a superpower.
+        </p>
+
+        <p>
+          In a world rapidly evolving with <span class="highlight">AI-generated code</span>, the need to write from scratch is decreasing. But the demand for <strong>problem solvers</strong> — people who can fix, optimize, and understand what's under the hood — is skyrocketing.
+        </p>
+
+        <p>
+          That’s where BugYou comes in.
+          It’s not your typical coding site. We focus on:
+        </p>
+
+        <ul>
+          <li><span class="highlight">Debugging challenges</span> styled like LeetCode problems — from logical bugs to runtime surprises.</li>
+          <li><span class="highlight">Error analysis tasks</span> that sharpen your eye for detail and edge cases.</li>
+          <li><span class="highlight">Logic building exercises</span> that help you approach code like a detective, not just a coder.</li>
+        </ul>
+
+        <p>
+          Whether you’re a beginner or an experienced developer, BugYou will help you:
+        </p>
+
+        <ul>
+          <li>Build <strong>core logic skills</strong>.</li>
+          <li>Recognize <strong>hidden errors</strong> in complex code.</li>
+          <li>Become more <strong>AI-proof</strong> by doing what AI can’t: <em>think critically.</em></li>
+        </ul>
+
+        <p class="closing">
+          We’re here to make debugging fun, competitive, and addictive. Ready to train your bug radar? 
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -15,11 +15,15 @@ DROP TABLE IF EXISTS java_advanced CASCADE;
 DROP TABLE IF EXISTS cpp_basic CASCADE;
 DROP TABLE IF EXISTS cpp_intermediate CASCADE;
 DROP TABLE IF EXISTS cpp_advanced CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
 -- Create minimal users table for created_by reference
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password TEXT,
+    emailaddress TEXT UNIQUE NOT NULL,
+    fullname TEXT NOT NULL,
 );
 
 -- Base challenge table template
@@ -67,3 +71,4 @@ CREATE TABLE java_advanced (LIKE python_basic INCLUDING ALL);
 CREATE TABLE cpp_basic (LIKE python_basic INCLUDING ALL);
 CREATE TABLE cpp_intermediate (LIKE python_basic INCLUDING ALL);
 CREATE TABLE cpp_advanced (LIKE python_basic INCLUDING ALL); 
+CREATE TABLE users (LIKE python_basic INCLUDING ALL); 

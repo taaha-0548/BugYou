@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Guide - BugYou</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='guide/guide.css') }}" />
+</head>
+
+<body>
+  <div class="bg-image"></div>
+
+  <div class="overlay">
+    <header class="navbar">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="BugYou Logo" />
+        BugYou
+      </div>
+      <nav>
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('guide') }}">Guide</a>
+        <a href="{{ url_for('login') }}">Login</a>
+        <a href="{{ url_for('register') }}">Sign Up</a>
+      </nav>
+    </header>
+
+    <!-- Guide Content -->
+    <main class="guide-content">
+      <h1 class="main-title glitch-text" data-text="How it works">How it works</h1>
+
+      <section class="instructions">
+        <p><strong>Welcome to BugYou!</strong> Here’s how to become a debugging wizard :</p>
+
+        <h2>🔍 Objective</h2>
+        <p>
+          You’ll be given a <strong>prewritten code snippet</strong> that contains one or more bugs. Your job is to:
+        </p>
+        <ul>
+          <li>Analyze the code carefully</li>
+          <li>Fix any errors (logical, syntax, or runtime)</li>
+          <li>Ensure <strong>all test cases pass</strong></li>
+        </ul>
+
+        <h2>📌 Example Task</h2>
+        <p>A sample question might look like this:</p>
+        <div class="example-image">
+\          <img src="{{ url_for('static', filename='assets/example-placeholder.png') }}" alt="Example BugYou Challenge" />
+        </div>
+
+        <h2>💡 Hints</h2>
+        <p>You can request hints during a challenge. However:</p>
+        <ul>
+          <li>Each hint you take <strong>deducts points</strong></li>
+          <li>Use them wisely — your final score depends on it!</li>
+        </ul>
+
+        <h2>🎯 Scoring System</h2>
+        <ul>
+          <li>Correct fix without hints: <strong>10 points</strong></li>
+          <li>Each hint used: <strong>-2 points</strong></li>
+          <li>Wrong submission: <strong>-5 points</strong></li>
+          <li>All test cases must pass to score</li>
+        </ul>
+
+        <h2>Tips for Success</h2>
+        <ul>
+          <li>Read the test case descriptions before editing</li>
+          <li>Use print/debug statements to trace logic</li>
+          <li>Think like a compiler — what would break?</li>
+        </ul>
+
+        <p class="closing">
+          That’s it! Ready to find the bugs and earn your stripes? Go to <a href="{{ url_for('login') }}">Login</a> or <a href="{{ url_for('register') }}">Sign Up</a> to begin.
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

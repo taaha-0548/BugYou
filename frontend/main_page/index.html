@@ -1,20 +1,20 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>BugYou - Fix the Bug</title>
-    
+
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+
     <!-- CodeMirror CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="./styles.css?v=8.7">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css" />
+
+    <!-- Custom CSS via Flask -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='main_page/styles.css') }}" />
 </head>
 <body>
     <div class="app-container">
@@ -389,13 +389,12 @@
         </div>
     </div>
 
-    <!-- CodeMirror JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
-    
-    <!-- Custom JS -->
-    <script src="./script.js?v=8.7"></script>
+
+    <!-- Custom JS via Flask -->
+    <script src="{{ url_for('static', filename='main_page/script.js') }}"></script>
 </body>
 </html>
