@@ -1,0 +1,109 @@
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  font-family: 'Press Start 2P', cursive;
+  background-color: #0D0D0D;
+  color: white;
+}
+.content {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  height: 100vh; text-align: center; padding: 2rem;
+  background: rgba(13, 13, 13, 0.1);
+}
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 3rem;
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+
+.logo-img {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 1rem;
+  filter: drop-shadow(0 0 20px #10B981) drop-shadow(0 0 40px #10B981);
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+
+.logo-text {
+  font-size: 3rem;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+@keyframes logoGlow {
+  from { text-shadow: 0 0 20px #10B981, 0 0 40px #10B981; }
+  to { text-shadow: 0 0 30px #10B981, 0 0 60px #10B981; }
+}
+.tagline {
+  font-size: 1rem; color: #a3f7bf;
+  text-shadow: 0 0 10px #10B981;
+  margin-bottom: 1rem;
+}
+.subtitle {
+  font-size: 0.7rem; color: #6ee7b7; opacity: 0.8;
+  text-shadow: 0 0 8px #10B981;
+  margin-bottom: 2rem;
+}
+.buttons {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  justify-content: center;
+}
+.btn {
+  padding: 1.2rem 2rem; background: #10B981; border: none; border-radius: 8px;
+  font-family: 'Press Start 2P', cursive; font-size: 0.7rem; color: #0D0D0D;
+  box-shadow: 0 0 20px #10B981; cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.btn:hover {
+  background: #0f966c; box-shadow: 0 0 40px #0f966c;
+  transform: translateY(-3px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s;
+}
+.btn:hover::before {
+  left: 100%;
+}
+
+.secondary-buttons {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: #10B981;
+  border: 2px solid #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn.secondary:hover {
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+}
+
+.game-info {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5rem;
+  color: #6ee7b7;
+  opacity: 0.6;
+}

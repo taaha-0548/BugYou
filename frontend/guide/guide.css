@@ -1,0 +1,274 @@
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow-x: hidden;
+  font-family: 'Press Start 2P', cursive;
+  background-color: #0D0D0D;
+  color: white;
+}
+
+.content {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  padding: 2rem;
+  background: rgba(13, 13, 13, 0.1);
+}
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.4);    
+  backdrop-filter: blur(10px);          
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  margin-bottom: 3rem;
+}
+
+.navbar nav a {
+  margin-left: 1.5rem;
+  text-decoration: none;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.navbar nav a:hover {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  transform: scale(1.1);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; 
+}
+
+.logo-img {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 0 10px #10B981);
+}
+
+.logo-text {
+  font-size: 1rem;
+  text-shadow: 0 0 10px #10B981;
+}
+
+/* Main content */
+.guide-content {
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.main-title {
+  font-size: 2.5rem;
+  color: #10B981;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  margin-bottom: 3rem;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes titleGlow {
+  from { text-shadow: 0 0 20px #10B981, 0 0 40px #10B981; }
+  to { text-shadow: 0 0 30px #10B981, 0 0 60px #10B981; }
+}
+
+/* Instructions section */
+.instructions {
+  background: rgba(16, 185, 129, 0.05);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  padding: 2rem;
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  margin-bottom: 2rem;
+}
+
+.text-block {
+  margin-bottom: 2rem;
+}
+
+.text-block p {
+  line-height: 1.8;
+  font-size: 0.7rem;
+  color: #e2e2e2;
+  margin-bottom: 1rem;
+}
+
+/* Section Cards */
+.section-card {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: all 0.3s ease;
+}
+
+.section-card:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.section-title {
+  font-size: 1rem;
+  color: #10B981;
+  text-shadow: 0 0 10px #10B981;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.section-card p {
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: #e2e2e2;
+  text-align: left;
+  margin-bottom: 1rem;
+}
+
+/* Lists */
+.objective-list, .hint-list, .scoring-list, .tips-list {
+  text-align: left;
+}
+
+.objective-item, .hint-item, .scoring-item, .tip-item {
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: #e2e2e2;
+  margin-bottom: 0.8rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.objective-item::before, .hint-item::before, .scoring-item::before, .tip-item::before {
+  content: "▶";
+  position: absolute;
+  left: 0;
+  color: #10B981;
+  font-size: 0.5rem;
+}
+
+/* Code Block */
+.example-placeholder {
+  margin: 1rem 0;
+}
+
+.code-block {
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  text-align: left;
+}
+
+.code-header {
+  background: rgba(16, 185, 129, 0.2);
+  padding: 0.8rem;
+  font-size: 0.6rem;
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.code-content {
+  padding: 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #e2e2e2;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Closing section */
+.closing {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.closing p {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #a3f7bf;
+  text-shadow: 0 0 8px #10B981;
+}
+
+.closing a {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  text-decoration: none;
+}
+
+.closing a:hover {
+  color: #0f966c;
+  text-shadow: 0 0 12px #0f966c;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.btn {
+  padding: 1.2rem 2rem;
+  background: #10B981;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #0D0D0D;
+  box-shadow: 0 0 20px #10B981;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn:hover {
+  background: #0f966c;
+  box-shadow: 0 0 40px #0f966c;
+  transform: translateY(-3px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s;
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: #10B981;
+  border: 2px solid #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn.secondary:hover {
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+}
