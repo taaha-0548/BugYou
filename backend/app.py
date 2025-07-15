@@ -3,7 +3,7 @@ BugYou Flask Backend API
 Integrates database with frontend for complete debugging challenge platform
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
 import requests
 from datetime import datetime
@@ -15,6 +15,12 @@ import json
 import hashlib
 from string import Template
 # from concurrent.futures import ThreadPoolExecutor  # Removed - using sequential execution to avoid rate limiting
+from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import InputRequired, Length, ValidationError, Email
+from database_config import DatabaseManager
 
 # Import our database functions
 from database_config import (
@@ -33,11 +39,14 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for API endpoi
 
 # Additional static folders
 STATIC_FOLDERS = {
-    'main': '../frontend/main_page',
+     'main': '../frontend/main_page',
     'login': '../frontend/login',
     'signup': '../frontend/signup',
     'admin': '../frontend/admin',
-    'assets': '../Assets'  # Assets directory
+    'assets': '../Assets',
+    'home': '../frontend/home',         # <-- Add this line
+    'guide': '../frontend/guide',       # <-- (Optional, for guide.css)
+    'about': '../frontend/about',       # <-- (Optional, for about.css)
 }
 
 # Configuration
@@ -203,6 +212,11 @@ def serve_frontend():
     """Serve the main frontend page"""
     return send_from_directory(STATIC_FOLDERS['main'], 'index.html')
 
+@app.route('/home')
+def serve_home():
+    """Serve the home page"""
+    return send_from_directory('../frontend/home', 'home.html')
+
 @app.route('/login')
 def serve_login():
     """Serve the login page"""
@@ -213,36 +227,58 @@ def serve_signup():
     """Serve the signup page"""
     return send_from_directory(STATIC_FOLDERS['signup'], 'signup.html')
 
+@app.route('/guide')
+def serve_guide():
+    """Serve the guide page"""
+    return send_from_directory('../frontend/guide', 'guide.html')
+
 @app.route('/admin')
 def serve_admin():
     """Serve the admin page"""
     return send_from_directory(STATIC_FOLDERS['admin'], 'admin.html')
 
+@app.route('/about')
+def serve_about():
+    """Serve the about page"""
+    return send_from_directory(STATIC_FOLDERS['about'], 'about.html')
+
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
     """Serve files from Assets directory"""
     try:
-        return send_from_directory('../Assets', filename)
+        return send_from_directory(STATIC_FOLDERS['assets'], filename)
     except Exception as e:
         print(f"Error serving asset {filename}: {str(e)}")
         return f"Asset {filename} not found", 404
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    """Serve static files (CSS, JS, etc.)"""
-    # First try to serve from the current page's directory
-    current_page = request.path.split('/')[1]  # Get the first part of the path
+    # Special handling for /home/home.css, /guide/guide.css, /about/about.css
+    if filename.startswith('home/'):
+        subfile = filename[len('home/'):]
+        folder = STATIC_FOLDERS['home']
+        if os.path.exists(os.path.join(folder, subfile)):
+            return send_from_directory(folder, subfile)
+    if filename.startswith('guide/'):
+        subfile = filename[len('guide/'):]
+        folder = STATIC_FOLDERS['guide']
+        if os.path.exists(os.path.join(folder, subfile)):
+            return send_from_directory(folder, subfile)
+    if filename.startswith('about/'):
+        subfile = filename[len('about/'):]
+        folder = STATIC_FOLDERS['about']
+        if os.path.exists(os.path.join(folder, subfile)):
+            return send_from_directory(folder, subfile)
+    # Existing logic for login, signup, admin
+    current_page = request.path.split('/')[1] if '/' in request.path else ''
     if current_page in ['login', 'signup', 'admin']:
         folder = STATIC_FOLDERS[current_page]
         if os.path.exists(os.path.join(folder, filename)):
             return send_from_directory(folder, filename)
-    
-    # Then try other static folders
+    # Fallback: try all folders
     for folder_name, folder_path in STATIC_FOLDERS.items():
         if os.path.exists(os.path.join(folder_path, filename)):
             return send_from_directory(folder_path, filename)
-    
-    # If file not found in any directory, return 404
     return f"File {filename} not found", 404
 
 # ================================
@@ -1775,6 +1811,83 @@ def add_challenge():
             'success': False,
             'error': str(e)
         }), 500
+
+app.config['SECRET_KEY'] = 'thisisasecretkey'
+bcrypt = Bcrypt(app)
+db = DatabaseManager()
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, user_id, username):
+        self.id = user_id
+        self.username = username
+
+@login_manager.user_loader
+def load_user(user_id):
+    query = "SELECT user_id, username FROM users WHERE user_id = %s"
+    result = db.execute_query(query, (user_id,), fetch_one=True)
+    return User(result['user_id'], result['username']) if result else None
+
+class RegisterForm(FlaskForm):
+    email = StringField(validators=[InputRequired(), Email()], render_kw={"placeholder": "Email"})
+    fullname = StringField(validators=[InputRequired(), Length(min=2, max=50)], render_kw={"placeholder": "Full Name"})
+    username = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
+    password = PasswordField(validators=[InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
+    submit = SubmitField('Register')
+    def validate_username(self, username):
+        query = "SELECT user_id FROM users WHERE username = %s"
+        if db.execute_query(query, (username.data,), fetch_one=True):
+            raise ValidationError('Username already exists.')
+
+class LoginForm(FlaskForm):
+    username = StringField(validators=[InputRequired()], render_kw={"placeholder": "Username"})
+    password = PasswordField(validators=[InputRequired()], render_kw={"placeholder": "Password"})
+    submit = SubmitField('Login')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username and password:
+            query = "SELECT user_id, username, password FROM users WHERE username = %s"
+            result = db.execute_query(query, (username,), fetch_one=True)
+            if result and bcrypt.check_password_hash(result['password'], password):
+                login_user(User(result['user_id'], result['username']))
+                return redirect('/')
+    return send_from_directory(STATIC_FOLDERS['login'], 'login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        fullname = request.form.get('fullname')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if email and fullname and username and password:
+            check_query = "SELECT user_id FROM users WHERE username = %s"
+            existing_user = db.execute_query(check_query, (username,), fetch_one=True)
+            if not existing_user:
+                hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
+                insert_query = """
+                    INSERT INTO users (username, password, emailaddress, fullname)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING user_id, username
+                """
+                result = db.execute_query(insert_query, (username, hashed_pw, email, fullname), fetch_one=True)
+                if result:
+                    login_user(User(result['user_id'], result['username']))
+                    return redirect('/')
+    return send_from_directory(STATIC_FOLDERS['signup'], 'signup.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect('/home')
 
 if __name__ == '__main__':
     print("🔌 Testing database connection...")
