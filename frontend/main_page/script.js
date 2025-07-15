@@ -472,7 +472,17 @@ function showTestCase(index, context = 'main') {
         // Display actual output if test has been run and completed
         if (testResults && testResults[index] && testResults[index].status !== 'running') {
             actualOutputSection.style.display = 'block';
-            const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+            let actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+            // Only for Actual Output: pretty-print arrays/objects
+            try {
+                if (typeof actualOutput === 'string' && (actualOutput.trim().startsWith('[') || actualOutput.trim().startsWith('{'))) {
+                    actualOutput = JSON.stringify(JSON.parse(actualOutput));
+                } else if (typeof actualOutput === 'object') {
+                    actualOutput = JSON.stringify(actualOutput);
+                }
+            } catch (e) {
+                // If parsing fails, leave as-is
+            }
             testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
             
             // Update result badge with simple status
@@ -1044,7 +1054,15 @@ async function submitSolution() {
                 })
             });
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                // If not JSON, show a user-friendly error
+                const text = await response.text();
+                showResultsNotification('Error', 'Server error: ' + (text.slice(0, 200) || 'Invalid response from server.'), 'error');
+                return;
+            }
             console.log('Submission results:', data);
 
             // Process visible test results immediately (unless we skipped them)
@@ -1365,7 +1383,17 @@ async function runTests() {
 
             clearTimeout(timeoutId);
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                // If not JSON, show a user-friendly error
+                const text = await response.text();
+                showResultsNotification('Error', 'Server error: ' + (text.slice(0, 200) || 'Invalid response from server.'), 'error');
+                testResults = [];
+                updateTestResults();
+                return;
+            }
             console.log('Test results:', data);
 
             if (data.success) {
@@ -1425,7 +1453,7 @@ async function runTests() {
                 updateTestResults();
                 showResultsNotification('Timeout', 'Test execution took longer than expected. This might be due to network issues or complex test cases. Please try again.', 'error');
             } else {
-                throw error;
+                showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
             }
         }
 
