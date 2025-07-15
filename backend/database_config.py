@@ -307,6 +307,64 @@ def get_leaderboard(limit=10):
     query = "SELECT * FROM leaderboard LIMIT %s"
     return db.execute_query(query, (limit,))
 
+def insert_challenge(language, difficulty, data):
+    """Insert a new challenge into the correct table based on language and difficulty."""
+    table_name = get_table_name(language, difficulty)
+    db = DatabaseManager()
+    # Map fields to columns
+    columns = [
+        'title',
+        'problem_statement',
+        'buggy_code',
+        'reference_solution',
+        'solution_explanation',
+        'hint_1', 'hint_2', 'hint_3',
+        'learning_objectives',
+        'test_case_1_input', 'test_case_1_expected',
+        'test_case_2_input', 'test_case_2_expected',
+        'test_case_3_input', 'test_case_3_expected',
+        'test_case_4_input', 'test_case_4_expected',
+        'test_case_5_input', 'test_case_5_expected',
+        'hidden_test_1_input', 'hidden_test_1_expected',
+        'hidden_test_2_input', 'hidden_test_2_expected'
+    ]
+    # Prepare values from data
+    values = [
+        data.get('title'),
+        data.get('description'),
+        data.get('buggy_code'),
+        data.get('solution'),
+        data.get('solution_explanation'),
+        data['hints'][0] if len(data['hints']) > 0 else None,
+        data['hints'][1] if len(data['hints']) > 1 else None,
+        data['hints'][2] if len(data['hints']) > 2 else None,
+        data.get('learning_objective'),
+        # Visible test cases (up to 5)
+        data['test_cases'][0]['input'] if len(data['test_cases']) > 0 else None,
+        data['test_cases'][0]['expected'] if len(data['test_cases']) > 0 else None,
+        data['test_cases'][1]['input'] if len(data['test_cases']) > 1 else None,
+        data['test_cases'][1]['expected'] if len(data['test_cases']) > 1 else None,
+        data['test_cases'][2]['input'] if len(data['test_cases']) > 2 else None,
+        data['test_cases'][2]['expected'] if len(data['test_cases']) > 2 else None,
+        data['test_cases'][3]['input'] if len(data['test_cases']) > 3 else None,
+        data['test_cases'][3]['expected'] if len(data['test_cases']) > 3 else None,
+        data['test_cases'][4]['input'] if len(data['test_cases']) > 4 else None,
+        data['test_cases'][4]['expected'] if len(data['test_cases']) > 4 else None,
+        # Hidden test cases (always 2)
+        data['hidden_test_cases'][0]['input'] if len(data['hidden_test_cases']) > 0 else None,
+        data['hidden_test_cases'][0]['expected'] if len(data['hidden_test_cases']) > 0 else None,
+        data['hidden_test_cases'][1]['input'] if len(data['hidden_test_cases']) > 1 else None,
+        data['hidden_test_cases'][1]['expected'] if len(data['hidden_test_cases']) > 1 else None,
+    ]
+    placeholders = ', '.join(['%s'] * len(columns))
+    colnames = ', '.join(columns)
+    query = f"""
+        INSERT INTO {table_name} ({colnames})
+        VALUES ({placeholders})
+        RETURNING challenge_id
+    """
+    return db.execute_query(query, values, fetch_one=True)
+
 def setup_environment():
     """Setup environment variables for database"""
     env_content = f"""# BugYou Database Environment Variables v2.0

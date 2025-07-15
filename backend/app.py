@@ -29,7 +29,8 @@ from database_config import (
     get_user_by_username,
     create_user,
     test_connection,
-    CHALLENGE_TABLES
+    CHALLENGE_TABLES,
+    insert_challenge
 )
 
 # Initialize Flask app with multiple static folders
@@ -1760,53 +1761,77 @@ def add_challenge():
     """Add a new challenge"""
     try:
         data = request.get_json()
-        
+        print("[DEBUG] Received challenge data:", data)
         # Validate required fields
-        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'solution', 'test_cases']
+        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'solution', 'solution_explanation', 'hints', 'test_cases', 'hidden_test_cases']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
-        
         if missing_fields:
+            print(f"[DEBUG] Missing fields: {missing_fields}")
             return jsonify({
                 'success': False,
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
             }), 400
-
         # Validate test cases
-        if len(data['test_cases']) < 3:
+        if not isinstance(data['test_cases'], list) or len(data['test_cases']) < 3:
+            print("[DEBUG] Not enough visible test cases")
             return jsonify({
                 'success': False,
-                'error': 'At least 3 test cases are required'
+                'error': 'At least 3 visible test cases are required'
             }), 400
-
+        # Validate hidden test cases
+        if not isinstance(data['hidden_test_cases'], list) or len(data['hidden_test_cases']) != 2:
+            print("[DEBUG] Incorrect number of hidden test cases")
+            return jsonify({
+                'success': False,
+                'error': 'Exactly 2 hidden test cases are required'
+            }), 400
+        # Validate hints
+        if not isinstance(data['hints'], list) or len(data['hints']) != 3:
+            print("[DEBUG] Incorrect number of hints")
+            return jsonify({
+                'success': False,
+                'error': 'Exactly 3 hints are required'
+            }), 400
         # Validate language
         if data['language'] not in PISTON_LANGUAGES:
+            print(f"[DEBUG] Unsupported language: {data['language']}")
             return jsonify({
                 'success': False,
                 'error': f'Unsupported language. Must be one of: {", ".join(PISTON_LANGUAGES.keys())}'
             }), 400
-
         # Validate difficulty
         valid_difficulties = ['basic', 'intermediate', 'advanced']
         if data['difficulty'].lower() not in valid_difficulties:
+            print(f"[DEBUG] Invalid difficulty: {data['difficulty']}")
             return jsonify({
                 'success': False,
                 'error': f'Invalid difficulty. Must be one of: {", ".join(valid_difficulties)}'
             }), 400
-
-        # TODO: Add the challenge to the database
-        # This will be implemented when we add the database function
-        
-        return jsonify({
-            'success': True,
-            'message': 'Challenge added successfully',
-            'data': {
-                'title': data['title'],
-                'language': data['language'],
-                'difficulty': data['difficulty']
-            }
-        })
-
+        # Insert challenge into DB
+        try:
+            result = insert_challenge(data['language'], data['difficulty'].lower(), data)
+            print("[DEBUG] Insert result:", result)
+            if result and 'challenge_id' in result:
+                print(f"[DEBUG] Challenge added with ID: {result['challenge_id']}")
+                return jsonify({
+                    'success': True,
+                    'message': 'Challenge added successfully',
+                    'challenge_id': result['challenge_id']
+                })
+            else:
+                print("[DEBUG] Failed to insert challenge into database.")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to insert challenge into database.'
+                }), 500
+        except Exception as db_exc:
+            print(f"[DEBUG] Database error: {db_exc}")
+            return jsonify({
+                'success': False,
+                'error': f'Database error: {str(db_exc)}'
+            }), 500
     except Exception as e:
+        print(f"[DEBUG] General error: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
