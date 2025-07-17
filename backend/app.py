@@ -1837,6 +1837,51 @@ def add_challenge():
             'error': str(e)
         }), 500
 
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password required.'}), 400
+    db = DatabaseManager()
+    query = "SELECT user_id, username, password FROM users WHERE username = %s"
+    user = db.execute_query(query, (username,), fetch_one=True)
+    if not user:
+        return jsonify({'success': False, 'error': 'No account found with that username.'}), 404
+    if not bcrypt.check_password_hash(user['password'], password):
+        return jsonify({'success': False, 'error': 'Incorrect password.'}), 401
+    return jsonify({'success': True, 'user': {'user_id': user['user_id'], 'username': user['username']}})
+
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
+    data = request.get_json()
+    fullname = data.get('fullname')
+    email = data.get('email')
+    username = data.get('username')
+    password = data.get('password')
+    if not all([fullname, email, username, password]):
+        return jsonify({'success': False, 'error': 'Please fill in all fields.'}), 400
+    db = DatabaseManager()
+    check_query = "SELECT user_id FROM users WHERE username = %s"
+    existing_user = db.execute_query(check_query, (username,), fetch_one=True)
+    if existing_user:
+        return jsonify({'success': False, 'error': 'Oops! That username is already taken. Please choose another.'}), 409
+    try:
+        hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
+        insert_query = """
+            INSERT INTO users (username, password, emailaddress, fullname)
+            VALUES (%s, %s, %s, %s)
+            RETURNING user_id, username
+        """
+        result = db.execute_query(insert_query, (username, hashed_pw, email, fullname), fetch_one=True)
+        if result:
+            return jsonify({'success': True, 'user': {'user_id': result['user_id'], 'username': result['username']}})
+        else:
+            return jsonify({'success': False, 'error': 'Signup failed. Please try again.'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Error: {str(e)}'}), 500
+
 app.config['SECRET_KEY'] = 'thisisasecretkey'
 bcrypt = Bcrypt(app)
 db = DatabaseManager()
