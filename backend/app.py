@@ -20,8 +20,6 @@ from flask_login import LoginManager, login_user, logout_user, login_required, U
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError, Email
-from database_config import DatabaseManager
-
 # Import our database functions
 from database_config import (
     get_challenges_by_language_difficulty, 
@@ -30,7 +28,18 @@ from database_config import (
     create_user,
     test_connection,
     CHALLENGE_TABLES,
-    insert_challenge
+    insert_challenge,
+    get_user_stats,
+    update_user_score,
+    DatabaseManager,
+    is_challenge_completed,
+    mark_challenge_completed,
+    add_solved_problem_to_user,
+    get_user_solved_stats,
+    get_leaderboard_data,
+    get_user_leaderboard_position,
+    update_leaderboard_entry,
+    update_leaderboard_ranks
 )
 
 # Initialize Flask app with multiple static folders
@@ -48,6 +57,8 @@ STATIC_FOLDERS = {
     'home': '../frontend/home',         # <-- Add this line
     'guide': '../frontend/guide',       # <-- (Optional, for guide.css)
     'about': '../frontend/about',       # <-- (Optional, for about.css)
+    'user_profile': '../frontend/user_profile',  # <-- Add user profile folder
+    'leaderboard': '../frontend/leaderboard',  # <-- Add leaderboard folder
 }
 
 # Configuration
@@ -210,13 +221,13 @@ def clear_cache():
 
 @app.route('/')
 def serve_frontend():
-    """Serve the main frontend page"""
-    return send_from_directory(STATIC_FOLDERS['main'], 'index.html')
-
-@app.route('/home')
-def serve_home():
     """Serve the home page"""
     return send_from_directory('../frontend/home', 'home.html')
+
+@app.route('/main_page')
+def serve_main_page():
+    """Serve the main code editor page"""
+    return send_from_directory(STATIC_FOLDERS['main'], 'index.html')
 
 @app.route('/login')
 def serve_login():
@@ -243,6 +254,16 @@ def serve_about():
     """Serve the about page"""
     return send_from_directory(STATIC_FOLDERS['about'], 'about.html')
 
+@app.route('/user_profile')
+def serve_user_profile():
+    """Serve the user profile page"""
+    return send_from_directory('../frontend/user_profile', 'user.html')
+
+@app.route('/leaderboard')
+def serve_leaderboard():
+    """Serve the leaderboard page"""
+    return send_from_directory('../frontend/leaderboard', 'leaderboard.html')
+
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
     """Serve files from Assets directory"""
@@ -254,7 +275,7 @@ def serve_assets(filename):
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    # Special handling for /home/home.css, /guide/guide.css, /about/about.css
+    # Special handling for /home/home.css, /guide/guide.css, /about/about.css, /user_profile/user.css
     if filename.startswith('home/'):
         subfile = filename[len('home/'):]
         folder = STATIC_FOLDERS['home']
@@ -268,6 +289,16 @@ def serve_static(filename):
     if filename.startswith('about/'):
         subfile = filename[len('about/'):]
         folder = STATIC_FOLDERS['about']
+        if os.path.exists(os.path.join(folder, subfile)):
+            return send_from_directory(folder, subfile)
+    if filename.startswith('user_profile/'):
+        subfile = filename[len('user_profile/'):]
+        folder = STATIC_FOLDERS['user_profile']
+        if os.path.exists(os.path.join(folder, subfile)):
+            return send_from_directory(folder, subfile)
+    if filename.startswith('leaderboard/'):
+        subfile = filename[len('leaderboard/'):]
+        folder = STATIC_FOLDERS['leaderboard']
         if os.path.exists(os.path.join(folder, subfile)):
             return send_from_directory(folder, subfile)
     # Existing logic for login, signup, admin
@@ -390,10 +421,17 @@ def get_challenge_details(language, difficulty, challenge_id):
         print(f"Loading challenge {challenge_id} for {language} - {difficulty}")
         challenge = get_challenge_by_id(language, difficulty, challenge_id)
         if challenge:
+            # Check if user is logged in and has solved this challenge
+            username = request.args.get('username')
+            is_solved = False
+            if username:
+                is_solved = is_challenge_completed(username, language, difficulty, challenge_id)
+            
             print(f"Successfully loaded challenge {challenge_id}")
             return jsonify({
                 'success': True,
-                'challenge': challenge
+                'challenge': challenge,
+                'is_solved': is_solved
             })
         else:
             print(f"Challenge {challenge_id} not found")
@@ -585,6 +623,7 @@ def validate_submission():
         language = data.get('language')
         challenge_id = data.get('challenge_id')
         difficulty = data.get('difficulty')
+        username = data.get('username')  # Get username from request
         
         if not all([code, language, challenge_id, difficulty]):
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
@@ -659,13 +698,40 @@ def validate_submission():
                         'all_passed': False
                     })
             
-            # All tests passed (visible and hidden)
+            # All tests passed (visible and hidden) - Check if already completed
+            xp_reward = None
+            if username:
+                # Check if user has already completed this challenge
+                if is_challenge_completed(username, language, difficulty, challenge_id):
+                    # Challenge already completed - no XP reward
+                    return jsonify({
+                        'success': True,
+                        'message': 'All test cases passed!',
+                        'visible_results': results,
+                        'all_passed': True,
+                        'score': results['score'],
+                        'xp_reward': None,
+                        'already_completed': True
+                    })
+                else:
+                    # First time completing this challenge - Award XP
+                    score_to_award = results['score']
+                    xp_reward = update_user_score(username, score_to_award)
+                    
+                    # Don't mark challenge as completed immediately - will be done via separate endpoint
+                    # This allows the frontend to show the submission modal first
+                    
+                    # Update leaderboard entry
+                    from database_config import update_leaderboard_entry
+                    update_leaderboard_entry(username)
+            
             return jsonify({
                 'success': True,
                 'message': 'All test cases passed!',
                 'visible_results': results,
                 'all_passed': True,
-                'score': results['score']
+                'score': results['score'],
+                'xp_reward': xp_reward
             })
         else:
             # Not all visible tests passed
@@ -1742,17 +1808,155 @@ def clean_user_code(code, language):
 
 @app.route('/api/user/<username>')
 def get_user_info(username):
-    """Get user information"""
+    """Get user information including XP and level"""
     try:
-        user = get_user_by_username(username)
-        if not user:
+        user_stats = get_user_stats(username)
+        if not user_stats:
             # Create new user if doesn't exist
             user = create_user(username)
+            if user:
+                user_stats = get_user_stats(username)
             
+        if user_stats:
+            return jsonify({
+                'success': True,
+                'user': {
+                    'user_id': user_stats['user_id'],
+                    'username': user_stats['username'],
+                    'level': user_stats['level'] or 1,
+                    'xp': user_stats['xp'] or 0
+                }
+            })
+        else:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/user/<username>/profile')
+def get_user_profile(username):
+    """Get user profile information including solved problems"""
+    try:
+        # Get basic user stats
+        user_stats = get_user_stats(username)
+        if not user_stats:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        # Get solved problems statistics
+        solved_stats = get_user_solved_stats(username)
+        
         return jsonify({
             'success': True,
-            'user': user
+            'profile': {
+                'user_id': user_stats['user_id'],
+                'username': user_stats['username'],
+                'level': user_stats['level'] or 1,
+                'xp': user_stats['xp'] or 0,
+                'total_solved': solved_stats['total_solved'],
+                'language_stats': solved_stats['language_stats'],
+                'recent_solved': solved_stats['solved_problems'][-5:] if solved_stats['solved_problems'] else []
+            }
         })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/user/stats/<username>')
+def get_user_stats_endpoint(username):
+    """Get user stats for XP display"""
+    try:
+        user_stats = get_user_stats(username)
+        if user_stats:
+            return jsonify({
+                'success': True,
+                'xp': user_stats['xp'] or 0,
+                'level': user_stats['level'] or 1
+            })
+        else:
+            return jsonify({'success': False, 'error': 'User not found'})
+    except Exception as e:
+        print(f"Error getting user stats: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get user stats'})
+
+@app.route('/api/challenge/complete', methods=['POST'])
+def mark_challenge_completed_api():
+    """Mark a challenge as completed for a user"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        language = data.get('language')
+        difficulty = data.get('difficulty')
+        challenge_id = data.get('challenge_id')
+        challenge_title = data.get('challenge_title')
+        time_taken = data.get('time_taken', 0)
+        score = data.get('score', 0)
+        
+        print(f"⏱️ Received completion request:")
+        print(f"   User: {username}")
+        print(f"   Challenge: {language} {difficulty} #{challenge_id}")
+        print(f"   Time taken: {time_taken} seconds ({time_taken//60}:{time_taken%60:02d})")
+        print(f"   Score: {score} XP")
+        
+        if not all([username, language, difficulty, challenge_id]):
+            return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
+        
+        # Add to solved problems (for profile page) with time_taken
+        # This function handles both marking as completed and storing time_taken
+        result = add_solved_problem_to_user(username, language, difficulty, challenge_id, challenge_title, time_taken)
+        
+        # Award XP if challenge was not already completed
+        xp_result = None
+        if result:
+            from database_config import update_user_score
+            xp_result = update_user_score(username, score)
+        
+        response_data = {'success': True, 'message': 'Challenge marked as completed'}
+        
+        if xp_result:
+            response_data.update({
+                'xp_awarded': score,
+                'new_xp': xp_result['new_xp'],
+                'current_level': xp_result['new_level'],
+                'new_level': xp_result['new_level'] if xp_result.get('level_up', False) else None
+            })
+        
+        return jsonify(response_data)
+    except Exception as e:
+        print(f"Error marking challenge completed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/leaderboard')
+def get_leaderboard():
+    """Get leaderboard data with optional filters"""
+    try:
+        filter_type = request.args.get('filter_type', 'overall')
+        filter_value = request.args.get('filter_value')
+        limit = int(request.args.get('limit', 50))
+        
+        leaderboard_data = get_leaderboard_data(limit, filter_type, filter_value)
+        
+        return jsonify({
+            'success': True,
+            'leaderboard': leaderboard_data
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/leaderboard/user/<username>')
+def get_user_leaderboard_position(username):
+    """Get user's current leaderboard position"""
+    try:
+        position_data = get_user_leaderboard_position(username)
+        
+        if position_data:
+            return jsonify({
+                'success': True,
+                'position': position_data
+            })
+        else:
+            return jsonify({'success': False, 'error': 'User not found in leaderboard'}), 404
+            
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1763,7 +1967,7 @@ def add_challenge():
         data = request.get_json()
         print("[DEBUG] Received challenge data:", data)
         # Validate required fields
-        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'solution', 'solution_explanation', 'hints', 'test_cases', 'hidden_test_cases']
+        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'reference_solution', 'solution_explanation', 'hints', 'test_cases', 'hidden_test_cases']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
         if missing_fields:
             print(f"[DEBUG] Missing fields: {missing_fields}")
@@ -1876,6 +2080,10 @@ def api_signup():
         """
         result = db.execute_query(insert_query, (username, hashed_pw, email, fullname), fetch_one=True)
         if result:
+            # Initialize leaderboard entry for new user
+            from database_config import initialize_user_leaderboard
+            initialize_user_leaderboard(username)
+            
             return jsonify({'success': True, 'user': {'user_id': result['user_id'], 'username': result['username']}})
         else:
             return jsonify({'success': False, 'error': 'Signup failed. Please try again.'}), 500
@@ -1957,12 +2165,13 @@ def register():
 @login_required
 def logout():
     logout_user()
-    return redirect('/home')
+    return redirect('/')
 
 if __name__ == '__main__':
     print("🔌 Testing database connection...")
     if test_connection():
         print("✅ Database connected successfully!")
+        
         print("🚀 Starting BugYou Flask server...")
         print("📍 Frontend: http://localhost:5000")
         print("🔗 API Health: http://localhost:5000/api/health")

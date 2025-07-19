@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guide - BugYou</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="./guide.css" />
 </head>
 
@@ -16,12 +17,21 @@
         <span class="logo-text">BugYou</span>
       </div>
       <nav>
-        <a href="/home">Home</a>
+        <a href="/">Home</a>
         <a href="/about">About</a>
         <a href="/guide">Guide</a>
+        <a href="/leaderboard" id="leaderboardLink" style="display: none;">
+          Leaderboard
+        </a>
         <a href="/login">Login</a>
         <a href="/signup">Sign Up</a>
       </nav>
+      <div class="user-profile" id="userProfile" style="display: none;">
+        <div class="user-info" id="userInfo" style="cursor: pointer;">
+          <i class="fas fa-user-circle"></i>
+          <span id="currentUsername">User</span>
+        </div>
+      </div>
     </header>
 
     <main class="guide-content">
@@ -98,9 +108,31 @@
 
       <div class="action-buttons">
         <a href="/" class="btn">Start Debugging</a>
-        <a href="/home" class="btn secondary">Back to Home</a>
+        <a href="/" class="btn secondary">Back to Home</a>
       </div>
     </main>
   </div>
+  
+  <script>
+    // Check if user is logged in and show profile section
+    document.addEventListener('DOMContentLoaded', function() {
+      const username = localStorage.getItem('currentUser');
+      if (username) {
+        const userProfile = document.getElementById('userProfile');
+        const currentUsername = document.getElementById('currentUsername');
+        const userInfo = document.getElementById('userInfo');
+        const leaderboardLink = document.getElementById('leaderboardLink');
+        
+        if (userProfile) userProfile.style.display = 'flex';
+        if (currentUsername) currentUsername.textContent = username;
+        if (leaderboardLink) leaderboardLink.style.display = 'inline-flex';
+        if (userInfo) {
+          userInfo.addEventListener('click', () => {
+            window.location.href = '/user_profile';
+          });
+        }
+      }
+    });
+  </script>
 </body>
 </html>
