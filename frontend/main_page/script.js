@@ -995,129 +995,54 @@ function showSubmissionModal(data) {
             if (hiddenTotal > 0) {
                 message += `   • Hidden Tests: ${hiddenPassed}/${hiddenTotal} passed\n`;
             }
-            message += `   • Overall: ${totalPassed}/${totalTests} tests passed\n\n`;
-            
-            const passPercentage = Math.round((totalPassed / totalTests) * 100);
-            
-            if (passPercentage === 100) {
-                message += `🎉 Perfect! All tests passed!\n`;
-                message += `Your solution handles all test cases correctly, including edge cases and hidden validation tests.\n\n`;
-                
-                            // Add XP reward information
-            if (data.xp_awarded) {
-                // Show XP rewards section
-                const xpRewardsSection = document.getElementById('xpRewardsSection');
-                const xpEarned = document.getElementById('xpEarned');
-                const newLevel = document.getElementById('newLevel');
-                const xpProgress = document.getElementById('xpProgress');
-                
-                if (xpRewardsSection && xpEarned && newLevel && xpProgress) {
-                    xpEarned.textContent = `+${data.xp_awarded || 0}`;
-                    newLevel.textContent = localLevel;
-                    xpProgress.textContent = `${localXP}/100`;
-                    xpRewardsSection.style.display = 'block';
-                    // Hide level up indicator by default
-                    const levelUpItem = document.getElementById('levelUpItem');
-                    if (levelUpItem) levelUpItem.style.display = 'none';
-                }
-                
-                message += `🏆 XP Rewards:\n`;
-                message += `   • +${data.xp_awarded} XP earned!\n`;
-                message += `   • Current Level: ${localLevel}\n`;
-                message += `   • XP Progress: ${localXP}/100\n`;
-                
-                if (data.new_level && data.new_level > localLevel) {
-                    message += `   • 🎉 LEVEL UP! New Level: ${data.new_level}\n`;
-                }
-                
-                // Animate XP bar with delay
-                setTimeout(() => {
-                    animateXPBarWithLocalState(data.xp_awarded, data.new_xp, data.current_level, data.new_level);
-                }, 1000); // 1 second delay
-            }
-            } else if (passPercentage >= 80) {
-                message += `✅ Great job! Most tests passed.\n`;
-                message += `Your solution is mostly correct. Consider edge cases that might need attention.\n\n`;
-                
-                // Add XP reward information for partial success
-                if (data.xp_reward) {
-                    // Show XP rewards section
-                    const xpRewardsSection = document.getElementById('xpRewardsSection');
-                    const xpEarned = document.getElementById('xpEarned');
-                    const newLevel = document.getElementById('newLevel');
-                    const xpProgress = document.getElementById('xpProgress');
-                    
-                    if (xpRewardsSection && xpEarned && newLevel && xpProgress) {
-                        xpEarned.textContent = `+${data.xp_reward.xp_awarded}`;
-                        newLevel.textContent = data.xp_reward.new_level;
-                        xpProgress.textContent = `${data.xp_reward.new_xp}/100`;
-                        xpRewardsSection.style.display = 'block';
-                    }
-                    
-                    message += `🏆 XP Rewards:\n`;
-                    message += `   • +${data.xp_reward.xp_awarded} XP earned!\n`;
-                    message += `   • New Level: ${data.xp_reward.new_level}\n`;
-                    message += `   • XP Progress: ${data.xp_reward.new_xp}/100\n`;
-                }
-            } else if (passPercentage >= 60) {
-                message += `⚠️  Good progress, but some tests failed.\n`;
-                message += `Your solution works for basic cases but may need fixes for edge cases or error handling.\n\n`;
-                
-                // Add XP reward information for partial success
-                if (data.xp_reward) {
-                    // Show XP rewards section
-                    const xpRewardsSection = document.getElementById('xpRewardsSection');
-                    const xpEarned = document.getElementById('xpEarned');
-                    const newLevel = document.getElementById('newLevel');
-                    const xpProgress = document.getElementById('xpProgress');
-                    
-                    if (xpRewardsSection && xpEarned && newLevel && xpProgress) {
-                        xpEarned.textContent = `+${data.xp_reward.xp_awarded}`;
-                        newLevel.textContent = data.xp_reward.new_level;
-                        xpProgress.textContent = `${data.xp_reward.new_xp}/100`;
-                        xpRewardsSection.style.display = 'block';
-                    }
-                    
-                    message += `🏆 XP Rewards:\n`;
-                    message += `   • +${data.xp_reward.xp_awarded} XP earned!\n`;
-                    message += `   • New Level: ${data.xp_reward.new_level}\n`;
-                    message += `   • XP Progress: ${data.xp_reward.new_xp}/100\n`;
-                }
-            } else {
-                message += `❌ Several tests failed.\n`;
-                message += `Your solution needs significant improvements. Review the algorithm logic and test cases.`;
-            }
         } else {
-            message = data.message || 'Your submission has been processed.';
+            message = '';
         }
-        
-
     }
-    
+    // XP Rewards Section
+    if (xpRewardsSection) {
+        const xpEarned = document.getElementById('xpEarned');
+        const newLevel = document.getElementById('newLevel');
+        const xpProgress = document.getElementById('xpProgress');
+        let xp = 0;
+        let level = localLevel;
+        let progress = `${localXP}/100`;
+        if (data.xp_reward) {
+            xp = data.xp_reward.xp_awarded || 0;
+            level = data.xp_reward.new_level || localLevel;
+            progress = `${data.xp_reward.new_xp || localXP}/100`;
+        } else if (data.xp_awarded !== undefined) {
+            xp = data.xp_awarded || 0;
+            level = data.new_level || localLevel;
+            progress = `${data.new_xp || localXP}/100`;
+        }
+        if (data.already_completed) {
+            xp = 0;
+        }
+        if (xpEarned) xpEarned.textContent = `+${xp}`;
+        if (newLevel) newLevel.textContent = level;
+        if (xpProgress) xpProgress.textContent = progress;
+        xpRewardsSection.style.display = 'block';
+    }
     if (submissionMessage) {
-        submissionMessage.innerHTML = message.replace(/\n/g, '<br>');
+        submissionMessage.innerHTML = message ? message.replace(/\n/g, '<br>') : '';
     }
-    
     // Show solution explanation section for successful submissions
     if (isSuccess) {
         const solutionExplanationSection = document.getElementById('solutionExplanationSection');
         const solutionExplanation = document.getElementById('solutionExplanation');
         if (solutionExplanationSection && solutionExplanation) {
             solutionExplanationSection.style.display = 'block';
-            
             // Add solution explanation content
             const explanation = currentChallenge.solution_explanation || 
                               'This challenge has been completed successfully. The solution involves identifying and fixing the bug in the provided code.';
-            
             solutionExplanation.innerHTML = explanation.replace(/\n/g, '<br>');
         }
-        
         // Show reference solution button
         const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
         if (showReferenceSolutionBtn) {
             showReferenceSolutionBtn.style.display = 'inline-flex';
         }
-        
         // Show next challenge button for successful submissions
         const loadNextChallengeBtn = document.getElementById('loadNextChallenge');
         if (loadNextChallengeBtn) {
@@ -1129,43 +1054,52 @@ function showSubmissionModal(data) {
         if (loadNextChallengeBtn) {
             loadNextChallengeBtn.style.display = 'none';
         }
-        
         // Hide reference solution button for failed submissions
         const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
         if (showReferenceSolutionBtn) {
             showReferenceSolutionBtn.style.display = 'none';
         }
     }
-    
     submissionModal.classList.add('show');
 }
 
 function hideSubmissionModal() {
     const submissionModal = document.getElementById('submissionModal');
     submissionModal.classList.remove('show');
+    // Ensure test case buttons/results are updated after modal closes
+    updateTestResults();
+    updateActiveTestCaseButton();
 }
 
+// Patch showReferenceSolutionSection to always show Next Challenge button
 function showReferenceSolutionSection() {
+    // Show the reference solution section
     const referenceSolutionSection = document.getElementById('referenceSolutionSection');
-    const referenceSolution = document.getElementById('referenceSolution');
-    const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
-    
-    if (referenceSolutionSection && referenceSolution) {
-        // Hide the button
-        if (showReferenceSolutionBtn) {
-            showReferenceSolutionBtn.style.display = 'none';
-        }
-        
-        // Show reference solution section
+    if (referenceSolutionSection) {
         referenceSolutionSection.style.display = 'block';
-        
-        // Add reference solution content
-        const solution = currentChallenge.reference_solution || 
-                       'def solution_function():\n    # Reference solution will be displayed here\n    pass';
-        
-        // Format the solution with syntax highlighting
+        void referenceSolutionSection.offsetHeight; // Force reflow
+    }
+    // Hide the reference solution button
+    const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
+    if (showReferenceSolutionBtn) {
+        showReferenceSolutionBtn.style.display = 'none';
+        void showReferenceSolutionBtn.offsetHeight; // Force reflow
+    }
+    // Fill in the reference solution content if it exists
+    const referenceSolution = document.getElementById('referenceSolution');
+    if (referenceSolution) {
+        const solution = currentChallenge && currentChallenge.reference_solution ? currentChallenge.reference_solution : 'def solution_function():\n    # Reference solution will be displayed here\n    pass';
         const formattedSolution = solution.replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
         referenceSolution.innerHTML = `<pre><code>${formattedSolution}</code></pre>`;
+        void referenceSolution.offsetHeight; // Force reflow
+    }
+    // Always show Next Challenge button in the modal footer
+    const loadNextChallengeBtn = document.getElementById('loadNextChallenge');
+    if (loadNextChallengeBtn) {
+        loadNextChallengeBtn.style.display = 'inline-flex';
+        loadNextChallengeBtn.disabled = false;
+        loadNextChallengeBtn.classList.remove('hidden');
+        void loadNextChallengeBtn.offsetHeight; // Force reflow
     }
 }
 
@@ -1704,10 +1638,18 @@ async function submitSolution() {
             const finalTime = getElapsedTime();
             console.log(`⏱️ Successful submission! Time taken: ${finalTime} seconds`);
             
+            // Always update testResults and UI with backend results
+            if (Array.isArray(data.test_results)) {
+                testResults = data.test_results;
+                console.log("passed");
+                updateTestResults();                   // keep your main panel in sync
+              
+                              // <-- Show the results panel after successful submission
+            }
             // Success! Show XP rewards
             showSubmissionModal(data);
-            showResultsNotification('Success!', 'All tests passed!', 'success');
             
+        
             // Mark challenge as completed and award XP if not already completed
             console.log(`🔍 Debug completion conditions:`);
             console.log(`   XP Reward: ${data.xp_reward ? 'Available' : 'Not available'}`);
@@ -1723,10 +1665,13 @@ async function submitSolution() {
                 console.log(`⚠️ Challenge already completed - no XP awarded`);
             }
         } else if (data.success && !data.all_passed) {
-            // Partial success - some tests passed
-            // Timer continues running for partial success
-            console.log(`⏱️ Partial success submission! Timer continues...`);
-            
+            // Partial success - some tests passed or only hidden tests failed
+            // Always update testResults and UI with backend results
+            if (Array.isArray(data.test_results)) {
+                testResults = data.test_results;
+                updateTestResults();
+                updateActiveTestCaseButton();
+            }
             showSubmissionModal(data);
             showResultsNotification('Partial Success', 'Some tests passed, but not all', 'warning');
         } else {
@@ -1736,8 +1681,13 @@ async function submitSolution() {
             
             score = Math.max(2, score - 3); // Deduct 3 points but keep minimum at 2
             updateScore();
-            showSubmissionModal(data);
-            showResultsNotification('Failed', data.error || 'Submission failed', 'error');
+            // Update testResults and UI with backend results
+            if (Array.isArray(data.test_results)) {
+                testResults = data.test_results;
+                updateTestResults();
+            }
+            // Only show notification, not the modal
+            showResultsNotification('Wrong Submission', data.error || 'Your submission failed on one or more test cases.', 'error');
         }
 
     } catch (error) {
@@ -2035,7 +1985,7 @@ async function runTests() {
                 
                 // Show success/failure message
                 if (lastRunAllPassed) {
-                    showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
+                    // Removed notification: showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
                 } else {
                     const failedTests = totalTestsCount - testsPassedCount;
                     const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
@@ -2246,3 +2196,7 @@ async function loadProblemsForDifficulty(difficulty) {
         problemsList.innerHTML = '<div class="error-message">Error loading problems</div>';
     }
 }
+
+// Add at the top of the file, after other top-level variables:
+let localLevel = 1;
+let localXP = 0;

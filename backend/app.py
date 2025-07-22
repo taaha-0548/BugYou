@@ -563,43 +563,16 @@ def execute_code():
         # Use batch execution for optimal performance
         batch_result = run_all_tests_in_batch(code, language, test_cases, func_name)
         
-        # If batch execution failed, fall back to sequential execution
+        # If batch execution failed, return error (do not fall back to sequential)
         if not batch_result.get('success', False):
             print(f"Batch execution failed: {batch_result.get('error', 'Unknown error')}")
-            print("Falling back to sequential execution...")
-            
-            # Run test cases sequentially as fallback
-            test_results = []
-            tests_passed = 0
-            
-            for i, test_case in enumerate(test_cases):
-                test_input = test_case['input']
-                # Convert string input to proper data type
-                if isinstance(test_input, str):
-                    try:
-                        test_input = json.loads(test_input)
-                    except:
-                        pass  # Keep as string if not valid JSON
-                
-                result = execute_single_test(
-                    code=code,
-                    config={'lang': language},
-                    test_input=test_input,
-                    expected=test_case.get('expected_output') or test_case.get('expected'),
-                    test_number=i + 1,
-                    challenge={'id': 0},
-                    func_name=func_name
-                )
-                if result['passed']:
-                    tests_passed += 1
-                test_results.append(result)
-                
-            result = {
-                'success': True,
-                'test_results': test_results,
-                'tests_passed': tests_passed,
+            return jsonify({
+                'success': False,
+                'error': batch_result.get('error', 'Batch execution failed'),
+                'test_results': [],
+                'tests_passed': 0,
                 'total_tests': len(test_cases)
-            }
+            }), 500
         else:
             # Use batch execution results
             result = batch_result
@@ -649,9 +622,8 @@ def validate_submission():
                     'number': len(visible_tests) + i
                 })
         
-        # Run hidden tests if all visible tests passed
+        # Run hidden tests in batch if all visible tests passed
         if results['tests_passed'] == len(visible_tests):
-            # Get language configuration
             if language not in PISTON_LANGUAGES:
                 return jsonify({
                     'success': False,
@@ -659,10 +631,6 @@ def validate_submission():
                     'visible_results': results,
                     'all_passed': False
                 })
-            
-            lang_config = {'lang': language}  # Simple config for execute_single_test
-            
-            # Extract function name for hidden tests
             func_name = extract_function_name(code, language)
             if not func_name:
                 return jsonify({
@@ -671,33 +639,39 @@ def validate_submission():
                     'visible_results': results,
                     'all_passed': False
                 })
-            
+            # Prepare hidden test cases for batch execution
+            batch_hidden_tests = []
             for test_case in hidden_tests:
                 test_input = test_case['input']
-                # Convert string input to proper data type (like in visible tests)
                 if isinstance(test_input, str):
                     try:
                         test_input = json.loads(test_input)
                     except Exception:
                         pass  # Keep as string if not valid JSON
-                result = execute_single_test(
-                    code=code,
-                    config=lang_config,
-                    test_input=test_input,
-                    expected=test_case.get('expected'),
-                    test_number=test_case['number'],
-                    challenge=challenge,
-                    func_name=func_name
-                )
-                print(f"[DEBUG] Hidden Test #{test_case['number']} - Input: {test_case['input']} | Expected: {test_case.get('expected')} | Output: {result.get('output')} | Passed: {result.get('passed')}")
-                if not result['passed']:
+                batch_hidden_tests.append({
+                    'input': test_input,
+                    'expected': test_case.get('expected')
+                })
+            if batch_hidden_tests:
+                hidden_batch_result = run_all_tests_in_batch(code, language, batch_hidden_tests, func_name)
+                # If any hidden test fails, return failure
+                if not hidden_batch_result.get('success', False):
                     return jsonify({
                         'success': False,
-                        'error': 'Hidden test cases failed',
+                        'error': hidden_batch_result.get('error', 'Hidden test cases failed'),
                         'visible_results': results,
-                        'all_passed': False
+                        'all_passed': False,
+                        'test_results': results.get('test_results', [])
                     })
-            
+                for hidden_result in hidden_batch_result.get('test_results', []):
+                    if not hidden_result.get('passed', False):
+                        return jsonify({
+                            'success': False,
+                            'error': 'Hidden test cases failed',
+                            'visible_results': results,
+                            'all_passed': False,
+                            'test_results': results.get('test_results', [])
+                        })
             # All tests passed (visible and hidden) - Check if already completed
             xp_reward = None
             if username:
@@ -706,32 +680,28 @@ def validate_submission():
                     # Challenge already completed - no XP reward
                     return jsonify({
                         'success': True,
-                        'message': 'All test cases passed!',
+                        'message': '',  # Removed 'All test cases passed!'
                         'visible_results': results,
                         'all_passed': True,
                         'score': results['score'],
                         'xp_reward': None,
-                        'already_completed': True
+                        'already_completed': True,
+                        'test_results': results.get('test_results', [])
                     })
                 else:
                     # First time completing this challenge - Award XP
                     score_to_award = results['score']
                     xp_reward = update_user_score(username, score_to_award)
-                    
-                    # Don't mark challenge as completed immediately - will be done via separate endpoint
-                    # This allows the frontend to show the submission modal first
-                    
-                    # Update leaderboard entry
                     from database_config import update_leaderboard_entry
                     update_leaderboard_entry(username)
-            
             return jsonify({
                 'success': True,
-                'message': 'All test cases passed!',
+                'message': '',  # Removed 'All test cases passed!'
                 'visible_results': results,
                 'all_passed': True,
                 'score': results['score'],
-                'xp_reward': xp_reward
+                'xp_reward': xp_reward,
+                'test_results': results.get('test_results', [])
             })
         else:
             # Not all visible tests passed
@@ -739,9 +709,9 @@ def validate_submission():
                 'success': False,
                 'error': 'Not all visible test cases passed',
                 'visible_results': results,
-                'all_passed': False
+                'all_passed': False,
+                'test_results': results.get('test_results', [])
             })
-            
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -930,34 +900,22 @@ def run_test_validation(code, language, challenge):
     # Use batch execution for better performance
     test_cases = challenge.get('test_cases', [])
     total_tests = len(test_cases)
-    
     if test_cases:
         batch_result = run_all_tests_in_batch(code, language, test_cases, func_name)
-        
         if batch_result.get('success', False):
             # Use batch execution results
             test_results = batch_result.get('test_results', [])
             tests_passed = batch_result.get('tests_passed', 0)
         else:
-            # Fall back to sequential execution
-            print(f"Batch validation failed: {batch_result.get('error', 'Unknown error')}")
-            print("Falling back to sequential validation...")
-            
-            test_results = []
-            tests_passed = 0
-            for i, test_case in enumerate(test_cases):
-                result = execute_single_test(
-                    code=code,
-                    config=config,
-                    test_input=test_case['input'],
-                    expected=test_case.get('expected_output') or test_case.get('expected', ''),
-                    test_number=i + 1,
-                    challenge=challenge,
-                    func_name=func_name
-                )
-                if result['passed']:
-                    tests_passed += 1
-                test_results.append(result)
+            # If batch execution fails, return error (do not fall back to sequential)
+            return {
+                'success': False,
+                'error': batch_result.get('error', 'Batch execution failed'),
+                'tests_passed': 0,
+                'total_tests': total_tests,
+                'score': 0,
+                'test_results': []
+            }
     else:
         test_results = []
         tests_passed = 0
@@ -1026,306 +984,6 @@ def convert_input_format(test_input, language):
     except Exception as e:
         print(f"Error converting input format: {e}")
         return str(test_input)
-
-def execute_single_test(code, config, test_input, expected, test_number, challenge, func_name):
-    """Execute a single test case"""
-    try:
-        # No artificial delays - let the system handle rate limiting naturally
-        
-        # Get language config
-        lang_config = PISTON_LANGUAGES.get(config['lang'])
-        if not lang_config:
-            return {
-                'test_number': test_number,
-                'passed': False,
-                'error': f'Unsupported language: {config["lang"]}',
-                'output': None,
-                'expected': expected
-            }
-
-        # Function name is now passed as parameter - no need to extract again
-        if not func_name:
-            return {
-                'test_number': test_number,
-                'passed': False,
-                'error': 'Could not identify main function',
-                'output': None,
-                'expected': expected
-            }
-
-        # Clean user code by removing any existing main/test functions
-        clean_code = clean_user_code(code, config['lang'])
-        
-        # Convert input format for the specific language
-        converted_input = convert_input_format(test_input, config['lang'])
-        
-        # Prepare test code using template
-        if config['lang'] in ['python', 'javascript']:
-            # lang_config['template'] is already a Template object
-            test_code = lang_config['template'].substitute(
-                func_name=func_name,
-                user_code=clean_code,
-                test_input=converted_input
-            )
-        else:
-            # Use .format() for Java and C++ (they still use {{ }} escaping)
-            test_code = lang_config['template'].format(
-                func_name=func_name,
-                user_code=clean_code,
-                test_input=converted_input
-            )
-        
-        # Removed debug output for performance
-        
-        # Validate and prepare Piston API request with error checking
-        filename = lang_config['filename']
-        
-        # Ensure filename doesn't have double extensions (fix for main.cpp.cpp issue)
-        if filename.count('.') > 1:
-            # Extract the base name and last extension
-            parts = filename.split('.')
-            if len(parts) >= 3:  # main.cpp.cpp -> parts = ['main', 'cpp', 'cpp']
-                filename = parts[0] + '.' + parts[-1]  # main.cpp
-            elif len(parts) == 2 and parts[0] == '':  # .cpp.cpp -> parts = ['', 'cpp', 'cpp']
-                filename = 'main.' + parts[-1]
-        
-        # Additional validation for common issues
-        if not filename or filename.startswith('.') or filename.endswith('.'):
-            # Fallback to language-specific default filenames
-            if config['lang'] == 'cpp':
-                filename = 'main.cpp'
-            elif config['lang'] == 'java':
-                filename = 'Main.java'
-            elif config['lang'] == 'python':
-                filename = 'main.py'
-            elif config['lang'] == 'javascript':
-                filename = 'main.js'
-            else:
-                filename = 'main.txt'
-        
-        piston_request = {
-            'language': lang_config['lang'],
-            'version': lang_config['version'],
-            'files': [
-                {
-                    'name': filename,
-                    'content': test_code
-                }
-            ],
-            'stdin': '',  # Add input if needed
-            'compile_timeout': 10000,  # 10 seconds
-            'run_timeout': 10000,  # 10 seconds
-            'compile_memory_limit': -1,  # No limit
-            'run_memory_limit': -1  # No limit
-        }
-        
-        # Optimized retry logic with faster timeouts for single test execution
-        import time
-        max_retries = 1  # Single retry for speed
-        base_delay = 0.3  # Even faster retry
-        
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    f'{PISTON_API}/execute',
-                    headers={'Content-Type': 'application/json'},
-                    json=piston_request,
-                    timeout=6  # Reduced timeout for faster failure detection
-                )
-                
-                if response.status_code == 200:
-                    break  # Success, exit retry loop
-                elif response.status_code == 429:  # Rate limit
-                    if attempt < max_retries - 1:  # Not the last attempt
-                        delay = base_delay * (1.5 ** attempt)  # Gentler backoff: 0.5s, 0.75s
-                        print(f"Rate limited (429), retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        return {
-                            'test_number': test_number,
-                            'passed': False,
-                            'error': 'Rate limit exceeded. Please try again in a few moments.',
-                            'output': 'Rate Limited',
-                            'expected': expected
-                        }
-                else:
-                    return {
-                        'test_number': test_number,
-                        'passed': False,
-                        'error': f'API Error: {response.status_code}',
-                        'output': f'Error {response.status_code}',
-                        'expected': expected
-                    }
-            except requests.RequestException as e:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (1.5 ** attempt)  # Gentler backoff
-                    print(f"Request failed: {e}, retrying in {delay}s...")
-                    time.sleep(delay)
-                    continue
-                else:
-                    return {
-                        'test_number': test_number,
-                        'passed': False,
-                        'error': f'Network error: {str(e)}',
-                        'output': 'Network Error',
-                        'expected': expected
-                    }
-        else:
-            # This should not happen, but just in case
-            return {
-                'test_number': test_number,
-                'passed': False,
-                'error': 'Max retries exceeded',
-                'output': 'Max Retries Exceeded',
-                'expected': expected
-            }
-            
-        result = response.json()
-        
-        # Check for compilation errors with detailed analysis
-        if result.get('compile', {}).get('stderr'):
-            compile_error = result["compile"]["stderr"]
-            
-            # Analyze common error patterns and provide helpful messages
-            if 'main.cpp.cpp' in compile_error:
-                error_msg = 'File naming issue detected. Please try again.'
-            elif 'cannot access' in compile_error and 'a.out' in compile_error:
-                error_msg = 'Compilation failed - executable could not be created.'
-            elif 'error:' in compile_error.lower():
-                # Extract the main error message
-                lines = compile_error.split('\n')
-                error_line = next((line for line in lines if 'error:' in line.lower()), compile_error)
-                error_msg = f'Compilation error: {error_line.strip()}'
-            else:
-                error_msg = f'Compilation error: {compile_error.strip()}'
-            
-            return {
-                'test_number': test_number,
-                'passed': False,
-                'error': error_msg,
-                'output': None,
-                'expected': expected,
-                'debug_info': {
-                    'filename': filename,
-                    'language': config['lang'],
-                    'full_error': compile_error
-                }
-            }
-        
-        # Check for runtime errors
-        if result.get('run', {}).get('stderr'):
-            runtime_error = result["run"]["stderr"]
-            return {
-                'test_number': test_number,
-                'passed': False,
-                'error': f'Runtime error: {runtime_error.strip()}',
-                'output': None,
-                'expected': expected
-            }
-            
-        # Get actual output
-        actual_output = result.get('run', {}).get('stdout', '').strip()
-        
-        # Parse JSON output if possible, then compare properly
-        try:
-            parsed_output = json.loads(actual_output)
-        except (json.JSONDecodeError, ValueError):
-            # If JSON parsing fails, check if it's a special case
-            actual_output_lower = actual_output.lower().strip()
-            if actual_output_lower == 'none':
-                parsed_output = None
-            elif actual_output_lower == 'null':
-                parsed_output = None
-            else:
-                parsed_output = actual_output
-        
-        # Compare with expected output using smart comparison
-        passed = compare_outputs_smart(parsed_output, expected)
-        
-        return {
-            'test_number': test_number,
-            'passed': passed,
-            'error': None,
-            'output': parsed_output,
-            'expected': expected
-        }
-        
-    except Exception as e:
-        return {
-            'test_number': test_number,
-            'passed': False,
-            'error': str(e),
-            'output': None,
-            'expected': expected
-        }
-
-def compare_outputs(actual, expected, comparison_type='exact'):
-    """Compare actual and expected outputs"""
-    if comparison_type == 'exact':
-        return str(actual).strip() == str(expected).strip()
-    else:
-        # Add more comparison types if needed
-        return False
-
-def compare_outputs_smart(actual, expected):
-    """Smart comparison that handles different data types properly"""
-      # Auto-fix stringified list like "[0,1]" into real list
-    if isinstance(expected, str) and expected.startswith('[') and expected.endswith(']'):
-        try:
-            expected = json.loads(expected)
-        except json.JSONDecodeError:
-            pass
-    # Handle None comparisons
-    if expected is None:
-        return actual is None
-    if actual is None:
-        return expected is None
-    
-    # Handle numeric comparisons (int, float)
-    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
-        return actual == expected
-    
-    # Handle string comparisons
-    if isinstance(expected, str) and isinstance(actual, str):
-        return actual.strip() == expected.strip()
-    
-    # Handle list/array comparisons
-    if isinstance(expected, list) and isinstance(actual, list):
-        return actual == expected
-    
-    # Handle mixed type comparisons (e.g., int vs string)
-    try:
-        # Try to convert both to the same type for comparison
-        if isinstance(expected, (int, float)):
-            # Expected is numeric, try to convert actual to numeric
-            if isinstance(actual, str):
-                # Handle special string cases first
-                if actual.lower().strip() in ['null', 'none']:
-                    return False  # None/null is not equal to a number
-                try:
-                    actual_num = float(actual) if '.' in actual else int(actual)
-                    return actual_num == expected
-                except ValueError:
-                    return False  # Can't convert, so not equal
-        elif isinstance(actual, (int, float)):
-            # Actual is numeric, try to convert expected to numeric
-            if isinstance(expected, str):
-                # Handle special string cases first
-                if expected.lower().strip() in ['null', 'none']:
-                    return False  # None/null is not equal to a number
-                try:
-                    expected_num = float(expected) if '.' in expected else int(expected)
-                    return actual == expected_num
-                except ValueError:
-                    return False  # Can't convert, so not equal
-    except Exception as e:
-        # If any comparison operation fails, log it and return False
-        print(f"Comparison error in compare_outputs_smart: {e}")
-        return False
-    
-    # Fallback to string comparison
-    return str(actual).strip() == str(expected).strip()
 
 def run_all_tests_in_batch(code, language, test_cases, func_name):
     """
@@ -1805,6 +1463,65 @@ def clean_user_code(code, language):
                     clean_lines.append(line)
         return '\n'.join(clean_lines)
     return code
+
+def compare_outputs_smart(actual, expected):
+    """Smart comparison that handles different data types properly"""
+    # Auto-fix stringified list like "[0,1]" into real list
+    if isinstance(expected, str) and expected.startswith('[') and expected.endswith(']'):
+        try:
+            expected = json.loads(expected)
+        except json.JSONDecodeError:
+            pass
+    # Handle None comparisons
+    if expected is None:
+        return actual is None
+    if actual is None:
+        return expected is None
+    
+    # Handle numeric comparisons (int, float)
+    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+        return actual == expected
+    
+    # Handle string comparisons
+    if isinstance(expected, str) and isinstance(actual, str):
+        return actual.strip() == expected.strip()
+    
+    # Handle list/array comparisons
+    if isinstance(expected, list) and isinstance(actual, list):
+        return actual == expected
+    
+    # Handle mixed type comparisons (e.g., int vs string)
+    try:
+        # Try to convert both to the same type for comparison
+        if isinstance(expected, (int, float)):
+            # Expected is numeric, try to convert actual to numeric
+            if isinstance(actual, str):
+                # Handle special string cases first
+                if actual.lower().strip() in ['null', 'none']:
+                    return False  # None/null is not equal to a number
+                try:
+                    actual_num = float(actual) if '.' in actual else int(actual)
+                    return actual_num == expected
+                except ValueError:
+                    return False  # Can't convert, so not equal
+        elif isinstance(actual, (int, float)):
+            # Actual is numeric, try to convert expected to numeric
+            if isinstance(expected, str):
+                # Handle special string cases first
+                if expected.lower().strip() in ['null', 'none']:
+                    return False  # None/null is not equal to a number
+                try:
+                    expected_num = float(expected) if '.' in expected else int(expected)
+                    return actual == expected_num
+                except ValueError:
+                    return False  # Can't convert, so not equal
+    except Exception as e:
+        # If any comparison operation fails, log it and return False
+        print(f"Comparison error in compare_outputs_smart: {e}")
+        return False
+    
+    # Fallback to string comparison
+    return str(actual).strip() == str(expected).strip()
 
 @app.route('/api/user/<username>')
 def get_user_info(username):

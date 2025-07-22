@@ -245,3 +245,130 @@ html, body {
   background: rgba(16, 185, 129, 0.1);
   box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
 }
+
+/* Developer Section */
+.developer-section {
+  margin: 3rem 0;
+  text-align: center;
+}
+
+.developer-title {
+  font-size: 1.5rem;
+  color: #10B981;
+  text-shadow: 0 0 15px #10B981;
+  margin-bottom: 2rem;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+.developer-card {
+  background: rgba(16, 185, 129, 0.1);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  backdrop-filter: blur(6px);
+  transition: all 0.3s ease;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.developer-card:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+}
+
+.linkedin-badge {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.developer-name {
+  font-size: 1rem;
+  color: #10B981;
+  text-shadow: 0 0 10px #10B981;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+.developer-role {
+  font-size: 0.7rem;
+  color: #e2e2e2;
+  opacity: 0.8;
+}
+
+.linkedin-logo {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.linkedin-logo a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover {
+  transform: translateY(-2px);
+}
+
+.profile-pic {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover .profile-pic {
+  transform: scale(1.1);
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+}
+
+.linkedin-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10B981;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover .linkedin-icon {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #0f966c;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  text-shadow: 0 0 8px #10B981;
+}
+
+/* LinkedIn Badge Customization */
+.badge-base {
+  background: transparent !important;
+}
+
+.badge-base__link {
+  color: #10B981 !important;
+  text-decoration: none !important;
+  font-family: 'Press Start 2P', cursive !important;
+  font-size: 0.8rem !important;
+  transition: all 0.3s ease !important;
+}
+
+.badge-base__link:hover {
+  color: #0f966c !important;
+  text-shadow: 0 0 8px #10B981 !important;
+}

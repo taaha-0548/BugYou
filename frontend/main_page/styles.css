@@ -939,6 +939,8 @@ body {
 
 /* Modal Content */
 .modal-content {
+    display: flex;
+    flex-direction: column;
     background: #111111;
     border-radius: 0.75rem;
     border: 1px solid var(--primary-color);
@@ -948,6 +950,8 @@ body {
     max-height: 80vh;
     overflow: hidden;
     animation: slideIn 0.3s ease;
+    position: relative;
+    z-index: 1001;
 }
 
 .modal-header {
@@ -990,10 +994,14 @@ body {
 }
 
 .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
     padding: 1.5rem;
 }
 
 .modal-footer {
+    flex-shrink: 0;
     padding: 1rem 1.5rem;
     border-top: 1px solid #333333;
     display: flex;

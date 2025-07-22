@@ -34,6 +34,28 @@
     </header>
 
     <main class="about-content">
+      <!-- Developer Section -->
+      <section class="developer-section">
+        <h2 class="developer-title">Developer</h2>
+        <div class="developer-card">
+          <div class="linkedin-badge">
+            <div class="badge-base LI-profile-badge" data-locale="en_US" data-size="medium" data-theme="light" data-type="HORIZONTAL" data-vanity="muhammad-taaha-6ba8b7286" data-version="v1">
+              <a class="badge-base__link LI-simple-link" href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286?trk=profile-badge"></a>
+            </div>
+          </div>
+          <div class="developer-name">Muhammad Taaha</div>
+          <div class="developer-role">Creator</div>
+          <div class="linkedin-logo">
+            <a href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286" target="_blank">
+              <div class="linkedin-icon">
+                <i class="fab fa-linkedin"></i>
+              </div>
+              <img src="/assets/profile_pic.jpg" alt="Muhammad Taaha" class="profile-pic">
+            </a>
+          </div>
+        </div>
+      </section>
+
       <h1 class="main-title">About BugYou</h1>
 
       <section class="description">
@@ -118,6 +140,18 @@
             window.location.href = '/user_profile';
           });
         }
+        
+        // Hide login and signup buttons for logged-in users
+        const loginLink = document.querySelector('a[href="/login"]');
+        const signupLink = document.querySelector('a[href="/signup"]');
+        if (loginLink) loginLink.style.display = 'none';
+        if (signupLink) signupLink.style.display = 'none';
+      } else {
+        // Show login and signup buttons for guests
+        const loginLink = document.querySelector('a[href="/login"]');
+        const signupLink = document.querySelector('a[href="/signup"]');
+        if (loginLink) loginLink.style.display = 'inline-flex';
+        if (signupLink) signupLink.style.display = 'inline-flex';
       }
     });
   </script>

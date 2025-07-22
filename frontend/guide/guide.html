@@ -131,6 +131,18 @@
             window.location.href = '/user_profile';
           });
         }
+        
+        // Hide login and signup buttons for logged-in users
+        const loginLink = document.querySelector('a[href="/login"]');
+        const signupLink = document.querySelector('a[href="/signup"]');
+        if (loginLink) loginLink.style.display = 'none';
+        if (signupLink) signupLink.style.display = 'none';
+      } else {
+        // Show login and signup buttons for guests
+        const loginLink = document.querySelector('a[href="/login"]');
+        const signupLink = document.querySelector('a[href="/signup"]');
+        if (loginLink) loginLink.style.display = 'inline-flex';
+        if (signupLink) signupLink.style.display = 'inline-flex';
       }
     });
   </script>

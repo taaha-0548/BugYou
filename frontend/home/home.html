@@ -76,10 +76,6 @@
                   <span class="profile-label">Level:</span>
                   <span class="profile-value" id="userLevel">Loading...</span>
                 </div>
-                <div class="profile-item">
-                  <span class="profile-label">XP:</span>
-                  <span class="profile-value" id="userXP">Loading...</span>
-                </div>
               </div>
               <div class="xp-progress-container">
                 <div class="xp-progress-bar">
@@ -150,16 +146,11 @@
         if (data.success && data.user) {
           const user = data.user;
           const levelElement = document.getElementById('userLevel');
-          const xpElement = document.getElementById('userXP');
           const xpProgressFill = document.getElementById('xpProgressFill');
           const xpProgressText = document.getElementById('xpProgressText');
           
           if (levelElement) {
             levelElement.textContent = user.level || 1;
-          }
-
-          if (xpElement) {
-            xpElement.textContent = user.xp || 0;
           }
 
           // Update XP progress bar
@@ -176,12 +167,10 @@
         console.error('Error fetching user data:', error);
         // Set default values if API fails
         const levelElement = document.getElementById('userLevel');
-        const xpElement = document.getElementById('userXP');
         const xpProgressFill = document.getElementById('xpProgressFill');
         const xpProgressText = document.getElementById('xpProgressText');
         
         if (levelElement) levelElement.textContent = '1';
-        if (xpElement) xpElement.textContent = '0';
         if (xpProgressFill) xpProgressFill.style.width = '0%';
         if (xpProgressText) xpProgressText.textContent = '0/100 XP';
       }
