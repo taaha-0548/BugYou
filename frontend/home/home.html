@@ -55,7 +55,7 @@
         const welcomeSection = document.createElement('div');
         welcomeSection.className = 'welcome-section';
         welcomeSection.innerHTML = `
-          <h1 class="welcome-title">🎉 Welcome back, ${username}!</h1>
+          <h1 class="welcome-title"> Welcome back, ${username}!</h1>
           <p class="welcome-subtitle">Ready to bug off?</p>
         `;
         logo.parentNode.insertBefore(welcomeSection, logo.nextSibling);
@@ -75,6 +75,10 @@
                 <div class="profile-item">
                   <span class="profile-label">Level:</span>
                   <span class="profile-value" id="userLevel">Loading...</span>
+                </div>
+                <div class="profile-item">
+                  <span class="profile-label">XP:</span>
+                  <span class="profile-value" id="userXP">Loading...</span>
                 </div>
               </div>
               <div class="xp-progress-container">
@@ -146,11 +150,16 @@
         if (data.success && data.user) {
           const user = data.user;
           const levelElement = document.getElementById('userLevel');
+          const xpElement = document.getElementById('userXP');
           const xpProgressFill = document.getElementById('xpProgressFill');
           const xpProgressText = document.getElementById('xpProgressText');
           
           if (levelElement) {
             levelElement.textContent = user.level || 1;
+          }
+
+          if (xpElement) {
+            xpElement.textContent = user.xp || 0;
           }
 
           // Update XP progress bar
@@ -167,14 +176,52 @@
         console.error('Error fetching user data:', error);
         // Set default values if API fails
         const levelElement = document.getElementById('userLevel');
+        const xpElement = document.getElementById('userXP');
         const xpProgressFill = document.getElementById('xpProgressFill');
         const xpProgressText = document.getElementById('xpProgressText');
         
         if (levelElement) levelElement.textContent = '1';
+        if (xpElement) xpElement.textContent = '0';
         if (xpProgressFill) xpProgressFill.style.width = '0%';
         if (xpProgressText) xpProgressText.textContent = '0/100 XP';
       }
     }
+
+document.addEventListener('DOMContentLoaded', () => {
+  // ------------------ Button Ripple Effect ------------------
+  document.querySelectorAll('.btn').forEach(button => {
+    button.addEventListener('click', function (e) {
+      const ripple = document.createElement('span');
+      ripple.classList.add('ripple');
+      const rect = this.getBoundingClientRect();
+      ripple.style.left = (e.clientX - rect.left) + 'px';
+      ripple.style.top = (e.clientY - rect.top) + 'px';
+      this.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 600);
+    });
+  });
+
+  // ------------------ XP Progress Animation ------------------
+  const xpFill = document.querySelector('.xp-progress-fill');
+  if (xpFill) {
+    setTimeout(() => {
+      xpFill.style.width = '70%'; // Example: Fill to 70%
+    }, 500);
+  }
+
+  // ------------------ Floating Particles ------------------
+  const content = document.querySelector('.content');
+  for (let i = 0; i < 20; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'floating-particle';
+    particle.style.left = Math.random() * 100 + '%';
+    particle.style.top = Math.random() * 100 + '%';
+    particle.style.animationDuration = (4 + Math.random() * 6) + 's';
+    particle.style.animationDelay = (Math.random() * 5) + 's';
+    content.appendChild(particle);
+  }
+});
+
   </script>
 </body>
 </html>
