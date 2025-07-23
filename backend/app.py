@@ -42,6 +42,11 @@ from database_config import (
     update_leaderboard_ranks
 )
 
+# --- Additions from app.py for backend optimizations ---
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# Filename sanitization utility
 # Initialize Flask app with multiple static folders
 app = Flask(__name__)
 app.static_folder = '../frontend/main_page'  # Primary static folder
@@ -61,20 +66,108 @@ STATIC_FOLDERS = {
     'leaderboard': '../frontend/leaderboard',  # <-- Add leaderboard folder
 }
 
+
+def sanitize_filename(name: str) -> str:
+    base, ext = os.path.splitext(name)
+    return f"{base}.{ext.lstrip('.')}" if ext else name
+
+# Session with retries for outbound requests
+_session = requests.Session()
+_retries = Retry(
+    total=2,
+    backoff_factor=0.5,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["POST"]
+)
+_session.mount("https://", HTTPAdapter(max_retries=_retries))
+
+# Multi-level caching
+_cache = {}
+_cache_timeout = 300  # 5 minutes
+_execution_cache = {}
+_execution_cache_timeout = 300  # 5 minutes
+_batch_cache = {}
+_batch_cache_timeout = 600  # 10 minutes
+
+def cache_result(timeout=300):
+    """Decorator to cache API results"""
+    def decorator(f):
+        from functools import wraps
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            cache_key = f.__name__ + str(args) + str(sorted(kwargs.items()))
+            current_time = time.time()
+            # Check if cached result exists and is still valid
+            if cache_key in _cache:
+                cached_time, cached_result = _cache[cache_key]
+                if current_time - cached_time < timeout:
+                    return cached_result
+            # Execute function and cache result
+            result = f(*args, **kwargs)
+            _cache[cache_key] = (current_time, result)
+            return result
+        return decorated_function
+    return decorator
+
+# Cache clearing endpoint
+@app.route('/api/cache/clear')
+def clear_cache():
+    global _cache, _execution_cache, _batch_cache
+    _cache = {}
+    _execution_cache = {}
+    _batch_cache = {}
+    return jsonify({
+        'success': True,
+        'message': 'All caches cleared successfully (API, execution, batch)',
+        'timestamp': datetime.now().isoformat()
+    })
+
+# Example: Add cache_result to ts (do not remove existing decorators)
+try:
+    app.view_functions['get_challenges'] = cache_result(timeout=60)(app.view_functions['get_challenges'])
+except Exception:
+    pass
+try:
+    app.view_functions['get_challenges_by_lang_diff'] = cache_result(timeout=60)(app.view_functions['get_challenges_by_lang_diff'])
+except Exception:
+    pass
+try:
+    app.view_functions['get_first_challenge'] = cache_result(timeout=60)(app.view_functions['get_first_challenge'])
+except Exception:
+    pass
+
+# --- Early syntax validation for Python/JS in code execution endpoint ---
+# (Add this logic at the start of your execute_code endpoint, before sending to Piston API)
+# Example:
+# if language == 'python':
+#     import ast
+#     try:
+#         ast.parse(code)
+#     except Exception as e:
+#         return jsonify({'success': False, 'error': f'Python syntax error: {e}'}), 400
+# elif language == 'javascript':
+#     if 'function ' not in code:
+#         return jsonify({'success': False, 'error': 'JavaScript code must define at least one function.'}), 400
+
+# --- Defensive programming for missing parameters and error handling ---
+# (Add checks for required parameters in endpoints, e.g. if not code or not language: ...)
+# --- Add response timing where relevant (e.g. start_time = time.time(); response_time = time.time() - start_time) ---
+
+
 # Configuration
 PISTON_API = 'https://emkc.org/api/v2/piston'
 
 # Simple in-memory cache for frequently accessed data
-_cache = {}
-_cache_timeout = 300  # 5 minutes
+# _cache = {}
+# _cache_timeout = 300  # 5 minutes
 
 # Enhanced cache for code execution results
-_execution_cache = {}
-_execution_cache_timeout = 300  # 5 minutes (increased for better performance)
+# _execution_cache = {}
+# _execution_cache_timeout = 300  # 5 minutes (increased for better performance)
 
 # Advanced cache for batch execution results
-_batch_cache = {}
-_batch_cache_timeout = 600  # 10 minutes
+# _batch_cache = {}
+# _batch_cache_timeout = 600  # 10 minutes
 
 # Language configuration for Piston API
 PISTON_LANGUAGES = {
@@ -82,51 +175,69 @@ PISTON_LANGUAGES = {
         'lang': 'python',
         'version': '3.10.0',
         'filename': 'main.py',
-        'template': Template('''import sys
-import json
+        'template': Template('''import json
 
 $user_code
 
-test_input = $test_input
+test_inputs = $test_inputs
+for raw in test_inputs:
+    try:
+        # support __args__ (list), __kwargs__ (dict), list, single
+        if isinstance(raw, dict) and "__args__" in raw:
+            result = $func_name(*raw["__args__"])
+        elif isinstance(raw, dict) and "__kwargs__" in raw:
+            result = $func_name(**raw["__kwargs__"])
+        elif isinstance(raw, list):
+            try: result = $func_name(*raw)
+            except TypeError: result = $func_name(raw)
+        else:
+            result = $func_name(raw)
 
-try:
-    if isinstance(test_input, list):
-        try:
-            result = $func_name(*test_input)
-        except TypeError:
-            result = $func_name(test_input)
-    else:
-        result = $func_name(test_input)
+        # void: echo args back
+        if isinstance(raw, dict) and raw.get("__void__"):
+            obj = raw.get("__args__", raw)
+        else:
+            obj = result
 
-    print(json.dumps(result))
-except Exception as e:
-    print(f"ERROR: {str(e)}")
+        print(json.dumps(obj, default=str))
+    except Exception as e:
+        print("ERROR: " + str(e))
 ''')
     },
-    'javascript': {
+  'javascript': {
         'lang': 'javascript',
         'version': '18.15.0',
         'filename': 'main.js',
         'template': Template('''$user_code
 
-const testInput = $test_input;
+const rl = require('readline')
+  .createInterface({{ input: process.stdin, output: process.stdout }});
+const lines = [];
+rl.on('line', l => lines.push(l));
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
+      const t = JSON.parse(raw);
+      let result;
+      if (t && t.__args__) {{
+        result = await $func_name(...t.__args__);
+      }} else if (t && t.__kwargs__) {{
+        result = await $func_name(t.__kwargs__);
+      }} else if (Array.isArray(t)) {{
+        result = await $func_name(t);
+      }} else {{
+        result = await $func_name(t);
+      }}
 
-try {
-    let result;
-    if (Array.isArray(testInput)) {
-        try {
-            result = $func_name(...testInput);
-        } catch (e1) {
-            result = $func_name(testInput);
-        }
-    } else {
-        result = $func_name(testInput);
-    }
-
-    console.log(JSON.stringify(result));
-} catch (e) {
-    console.log(`ERROR: ${e.message}`);
-}
+      const out = (t && t.__void__)
+        ? JSON.stringify(t.__args__ || t)
+        : JSON.stringify(result);
+      console.log(out);
+    }} catch (e) {{
+      console.log("ERROR: " + e.message);
+    }}
+  }}
+}});
 ''')
     },
     'java': {
@@ -136,15 +247,81 @@ try {
         'template': '''
 import java.util.*;
 import java.io.*;
-import java.math.*;
+import java.lang.reflect.*;
 
 public class Main {{
     {user_code}
-    
-    public static void main(String[] args) {{
-        int[] testInput = {test_input};
-        int result = {func_name}(testInput);
-        System.out.println(result);
+
+    public static void main(String[] args) throws Exception {{
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line;
+        while ((line = br.readLine()) != null) {{
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            try {{
+                Object result;
+                boolean isVoid = line.contains("\\\"__void__\\\":true");
+                // Multi-arg: {{"__args__":[...]}}
+
+                if (line.startsWith("{{") && line.contains("__args__")) {{
+                    int idx = line.indexOf("__args__");
+                    int start = line.indexOf('[', idx);
+                    int end = line.indexOf(']', start);
+                    String arrPart = line.substring(start + 1, end);
+                    String[] toks = arrPart.split(",");
+                    List<Object> items = new ArrayList<>();
+                    for (String t : toks) {{
+                        t = t.trim().replaceAll("^\\\"|\\\"$", "");
+                        if (!t.isEmpty()) {{
+                            if (t.matches("^-?\\\\d+$")) items.add(Integer.parseInt(t));
+                            else if (t.matches("^-?\\\\d+\\\\.\\\\d+$")) items.add(Double.parseDouble(t));
+                            else if (t.equalsIgnoreCase("true")||t.equalsIgnoreCase("false")) items.add(Boolean.parseBoolean(t));
+                            else items.add(t);
+                        }}
+                    }}
+                    Class<?>[]  pTypes = new Class<?>[items.size()];
+                    Object[]    pVals  = new Object[items.size()];
+                    for (int i = 0; i < items.size(); i++) {{
+                        Object v = items.get(i);
+                        if (v instanceof Integer) pTypes[i] = int.class;
+                        else if (v instanceof Double) pTypes[i] = double.class;
+                        else if (v instanceof Boolean) pTypes[i] = boolean.class;
+                        else pTypes[i] = String.class;
+                        pVals[i] = v;
+                    }}
+                    Method m = Main.class.getDeclaredMethod("{func_name}", pTypes);
+                    result = m.invoke(null, pVals);
+                }}
+                else if (line.startsWith("[")) {{
+                    String inner = line.substring(1, line.length()-1).trim();
+                    String[] parts = inner.isEmpty() ? new String[0] : inner.split(",");
+                    int[] arr = new int[parts.length];
+                    for (int i = 0; i < parts.length; i++) {{
+                        arr[i] = Integer.parseInt(parts[i].trim());
+                    }}
+                    result = Main.class.getDeclaredMethod("{func_name}", int[].class)
+                                       .invoke(null, (Object)arr);
+                }}
+                else {{
+                    String v = line.replaceAll("\\\"", "").trim();
+                    int iv = Integer.parseInt(v);
+                    result = Main.class.getDeclaredMethod("{func_name}", int.class)
+                                       .invoke(null, iv);
+                }}
+
+                if (isVoid) {{
+                    System.out.println(line);
+                }} else {{
+                    if (result instanceof int[]) {{
+                        System.out.println(Arrays.toString((int[])result));
+                    }} else if (result != null) {{
+                        System.out.println(result.toString());
+                    }}
+                }}
+            }} catch (Exception e) {{
+                System.out.println("ERROR: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
+            }}
+        }}
     }}
 }}
 '''
@@ -154,18 +331,7 @@ public class Main {{
         'version': '10.2.0',
         'filename': 'main.cpp',
         'template': '''
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <string>
-#include <map>
-#include <set>
-#include <unordered_map>
-#include <unordered_set>
-#include <queue>
-#include <stack>
-#include <cmath>
-#include <climits>
+#include <bits/stdc++.h>
 
 using namespace std;
 
@@ -181,39 +347,72 @@ int main() {{
     }
 }
 
-def cache_result(timeout=300):
-    """Decorator to cache API results"""
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            cache_key = f.__name__ + str(args) + str(sorted(kwargs.items()))
-            current_time = time.time()
-            
-            # Check if cached result exists and is still valid
-            if cache_key in _cache:
-                cached_time, cached_result = _cache[cache_key]
-                if current_time - cached_time < timeout:
-                    return cached_result
-            
-            # Execute function and cache result
-            result = f(*args, **kwargs)
-            _cache[cache_key] = (current_time, result)
-            return result
-        return decorated_function
-    return decorator
+def get_cache_key(code, language, test_cases):
+    """Generate a cache key for code execution"""
+    test_cases_str = json.dumps(test_cases, sort_keys=True)
+    return f"{language}:{hashlib.md5((code + test_cases_str).encode()).hexdigest()}"
 
-@app.route('/api/cache/clear')
-def clear_cache():
-    """Clear all caches"""
-    global _cache, _execution_cache, _batch_cache
-    _cache = {}
-    _execution_cache = {}
-    _batch_cache = {}
-    return jsonify({
-        'success': True,
-        'message': 'All caches cleared successfully (API, execution, batch)',
-        'timestamp': datetime.now().isoformat()
-    })
+def get_cached_execution(code, language, test_cases):
+    """Get cached execution result if available"""
+    cache_key = get_cache_key(code, language, test_cases)
+    if cache_key in _execution_cache:
+        result, timestamp = _execution_cache[cache_key]
+        if time.time() - timestamp < _execution_cache_timeout:
+            return result
+        del _execution_cache[cache_key]
+    return None
+
+def set_cached_execution(code, language, test_cases, result):
+    """Cache execution result"""
+    cache_key = get_cache_key(code, language, test_cases)
+    _execution_cache[cache_key] = (result, time.time())
+    
+    # Clean old cache entries
+    current_time = time.time()
+    expired_keys = [
+        k for k, (_, t) in _execution_cache.items() 
+        if current_time - t > _execution_cache_timeout
+    ]
+    for k in expired_keys:
+        del _execution_cache[k]
+
+def get_batch_cache_key(code, language, test_cases, func_name=None):
+    """Generate a specialized cache key for batch execution"""
+    import hashlib
+    # Use function signature for better cache hits across similar code
+    if func_name is None:
+        func_name = extract_function_name(code, language)
+    code_hash = hashlib.md5(code.encode()).hexdigest()
+    test_cases_str = json.dumps(test_cases, sort_keys=True)
+    test_cases_hash = hashlib.md5(test_cases_str.encode()).hexdigest()
+    return f"batch:{language}:{func_name}:{code_hash}:{test_cases_hash}"
+
+def get_cached_batch_execution(code, language, test_cases, func_name=None):
+    """Get cached batch execution result if available"""
+    cache_key = get_batch_cache_key(code, language, test_cases, func_name)
+    if cache_key in _batch_cache:
+        result, timestamp = _batch_cache[cache_key]
+        if time.time() - timestamp < _batch_cache_timeout:
+            print(f"✅ Cache hit for batch execution: {cache_key[:30]}...")
+            return result
+        del _batch_cache[cache_key]
+    return None
+
+def set_cached_batch_execution(code, language, test_cases, result, func_name=None):
+    """Cache batch execution result"""
+    cache_key = get_batch_cache_key(code, language, test_cases, func_name)
+    _batch_cache[cache_key] = (result, time.time())
+    
+    print(f"💾 Cached batch execution: {cache_key[:30]}...")
+    
+    # Clean old cache entries
+    current_time = time.time()
+    expired_keys = [
+        k for k, (_, t) in _batch_cache.items() 
+        if current_time - t > _batch_cache_timeout
+    ]
+    for k in expired_keys:
+        del _batch_cache[k]
 
 # ================================
 # SERVE FRONTEND
@@ -313,8 +512,6 @@ def serve_static(filename):
             return send_from_directory(folder_path, filename)
     return f"File {filename} not found", 404
 
-# ================================
-# API ENDPOINTS
 # ================================
 
 @app.route('/api/health')
@@ -527,18 +724,25 @@ def execute_code():
         
         if not code or not language:
             return jsonify({'success': False, 'error': 'Code and language required'}), 400
-        
+        # --- Early syntax validation for Python/JS ---
+        if language == 'python':
+            import ast
+            try:
+                ast.parse(code)
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Python syntax error: {e}'}), 400
+        elif language == 'javascript':
+            if 'function ' not in code:
+                return jsonify({'success': False, 'error': 'JavaScript code must define at least one function.'}), 400
+        # ... existing code ...
         # Check cache first
         cached_result = get_cached_execution(code, language, test_cases)
         if cached_result:
             return jsonify(cached_result)
-        
         # Check if language is supported
         if language not in PISTON_LANGUAGES:
             return jsonify({'success': False, 'error': 'Unsupported language'}), 400
-        
         config = PISTON_LANGUAGES[language]
-        
         # First check if code compiles
         compilation = check_code_compilation(code, language, config)
         if not compilation['success'] or not compilation['compiles']:
@@ -549,8 +753,6 @@ def execute_code():
             }
             set_cached_execution(code, language, test_cases, result)
             return jsonify(result), 400
-            
-                # Extract function name for test case setup  
         func_name = extract_function_name(code, language)
         if not func_name:
             result = {
@@ -559,10 +761,8 @@ def execute_code():
             }
             set_cached_execution(code, language, test_cases, result)
             return jsonify(result), 400
-            
         # Use batch execution for optimal performance
         batch_result = run_all_tests_in_batch(code, language, test_cases, func_name)
-        
         # If batch execution failed, return error (do not fall back to sequential)
         if not batch_result.get('success', False):
             print(f"Batch execution failed: {batch_result.get('error', 'Unknown error')}")
@@ -576,12 +776,9 @@ def execute_code():
         else:
             # Use batch execution results
             result = batch_result
-        
         # Cache successful result
         set_cached_execution(code, language, test_cases, result)
-        
         return jsonify(result)
-            
     except requests.RequestException as e:
         return jsonify({'success': False, 'error': f'Network error: {str(e)}'}), 500
     except Exception as e:
@@ -740,14 +937,20 @@ def check_code_compilation(code, language, config):
             }
         
         # For interpreted languages, we'll do a syntax check
-        if language in ['python', 'javascript']:
-            # Use convert_input_format to properly format null/None values
+        if language == 'python':
+            # Use a dummy test_inputs for syntax check
+            test_inputs = json.dumps([None])
+            test_code = lang_config['template'].substitute(
+                user_code=clean_code,
+                test_inputs=test_inputs,
+                func_name=func_name
+            )
+        elif language == 'javascript':
             converted_null = convert_input_format(None, language)
-            # lang_config['template'] is already a Template object
             test_code = lang_config['template'].substitute(
                 user_code=clean_code,
                 test_input=converted_null,
-                func_name=func_name  # Use actual function name
+                func_name=func_name
             )
         else:
             # For compiled languages (Java, C++), use proper null initialization
@@ -757,11 +960,10 @@ def check_code_compilation(code, language, config):
                 null_value = '{1, 2, 3}'  # Safe default for C++ (not empty)
             else:
                 null_value = 'null'
-            
             test_code = lang_config['template'].format(
                 user_code=clean_code,
                 test_input=null_value,
-                func_name=func_name  # Use actual function name
+                func_name=func_name
             )
         
         # Validate filename to prevent double extension issues
@@ -998,12 +1200,10 @@ def run_all_tests_in_batch(code, language, test_cases, func_name):
                 'total_tests': 0,
                 'test_results': []
             }
-        
         # Check batch cache first
         cached_result = get_cached_batch_execution(code, language, test_cases, func_name)
         if cached_result:
             return cached_result
-        
         # Get language configuration
         lang_config = PISTON_LANGUAGES.get(language)
         if not lang_config:
@@ -1014,199 +1214,141 @@ def run_all_tests_in_batch(code, language, test_cases, func_name):
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        
-        # Clean user code
+         # Clean user code
         clean_code = clean_user_code(code, language)
         
         # Create batch test code based on language
         if language == 'python':
-            # Python batch template - reads all inputs from stdin
             batch_code = f"""
 import sys
 import json
-import math
-import collections
-from collections import defaultdict, deque, Counter
-import heapq
-import bisect
-import itertools
-import functools
-from functools import lru_cache
-import re
-import string
 
 {clean_code}
 
-# Read all test cases from stdin
 test_inputs = []
 for line in sys.stdin:
     line = line.strip()
     if line:
         test_inputs.append(json.loads(line))
-
-# Execute each test case and output results
-for test_input in test_inputs:
+for raw in test_inputs:
     try:
-        # Smart argument handling: try both approaches and use the one that works
-        result = None
-        error = None
-        
-        # First try: assume function takes individual arguments (e.g., add(a, b))
-        if isinstance(test_input, list):
-            try:
-                result = {func_name}(*test_input)
-            except TypeError as e1:
-                error = e1
-                # If spreading fails, it's likely the function expects the list itself
-                try:
-                    result = {func_name}(test_input)
-                    error = None
-                except Exception as e2:
-                    error = e2
+        # support __args__ (list), __kwargs__ (dict), list, single
+        if isinstance(raw, dict) and "__args__" in raw:
+            result = {func_name}(*raw["__args__"])
+        elif isinstance(raw, dict) and "__kwargs__" in raw:
+            result = {func_name}(**raw["__kwargs__"])
+        elif isinstance(raw, list):
+            try: result = {func_name}(*raw)
+            except TypeError: result = {func_name}(raw)
         else:
-            # Single argument or non-list input
-            result = {func_name}(test_input)
-        
-        if error:
-            print(f"ERROR: {{str(error)}}")
+            result = {func_name}(raw)
+        # void: echo args back
+        if isinstance(raw, dict) and raw.get("__void__"):
+            obj = raw.get("__args__", raw)
         else:
-            print(json.dumps(result))
+            obj = result
+        print(json.dumps(obj, default=str))
     except Exception as e:
-        print(f"ERROR: {{str(e)}}")
+        print("ERROR: " + str(e))
 """
         
         elif language == 'javascript':
-            # JavaScript batch template - fixed brace escaping
             batch_code = f"""
-const readline = require('readline');
-const rl = readline.createInterface({{
-    input: process.stdin,
-    output: process.stdout,
-    terminal: false
-}});
-
-// Common utility functions
-const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
-const lcm = (a, b) => (a * b) / gcd(a, b);
-const isPrime = n => n > 1 && Array.from({{length: Math.sqrt(n)}}, (_, i) => i + 2).every(i => n % i !== 0);
-
 {clean_code}
 
-const testInputs = [];
-rl.on('line', (line) => {{
-    if (line.trim()) {{
-        testInputs.push(JSON.parse(line));
-    }}
-}});
+const rl = require('readline')
+  .createInterface({{ input: process.stdin, output: process.stdout }});
+const lines = [];
+rl.on('line', l => lines.push(l));
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
+      const t = JSON.parse(raw);
+      let result;
+      if (t && t.__args__) {{
+        result = await {func_name}(...t.__args__);
+      }} else if (t && t.__kwargs__) {{
+        result = await {func_name}(t.__kwargs__);
+      }} else if (Array.isArray(t)) {{
+        result = await {func_name}(t);
+      }} else {{
+        result = await {func_name}(t);
+      }}
 
-rl.on('close', () => {{
-    testInputs.forEach(testInput => {{
-        try {{
-            // Smart argument handling: try both approaches and use the one that works
-            let result;
-            let error = null;
-            
-            // First try: assume function takes individual arguments (e.g., add(a, b))
-            if (Array.isArray(testInput)) {{
-                try {{
-                    result = {func_name}(...testInput);
-                }} catch (e1) {{
-                    error = e1;
-                    // If spreading fails, it's likely the function expects the array itself
-                    try {{
-                        result = {func_name}(testInput);
-                        error = null;
-                    }} catch (e2) {{
-                        error = e2;
-                    }}
-                }}
-            }} else {{
-                // Single argument or non-array input
-                result = {func_name}(testInput);
-            }}
-            
-            if (error) {{
-                console.log(`ERROR: ${{error.message}}`);
-            }} else {{
-                console.log(JSON.stringify(result));
-            }}
-        }} catch (e) {{
-            console.log(`ERROR: ${{e.message}}`);
-        }}
-    }});
+      const out = (t && t.__void__)
+        ? JSON.stringify(t.__args__ || t)
+        : JSON.stringify(result);
+      console.log(out);
+    }} catch (e) {{
+      console.log("ERROR: " + e.message);
+    }}
+  }}
 }});
 """
-        
         elif language == 'java':
-            # Java batch template
-            batch_code = f"""
-import java.util.*;
+            batch_code = """
 import java.io.*;
-import java.math.*;
+import java.util.*;
+import java.util.stream.*;
 
 public class Main {{
-    {clean_code}
-    
-    public static void main(String[] args) throws IOException {{
+    // === User's method ===
+{user_code}
+    // =====================
+
+    public static void main(String[] args) throws Exception {{
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         String line;
-        
         while ((line = br.readLine()) != null) {{
             line = line.trim();
-            if (!line.isEmpty()) {{
-                try {{
-                    // Parse input array
-                    String[] parts = line.replace("[", "").replace("]", "").split(",");
-                    int[] testInput = new int[parts.length];
-                    for (int i = 0; i < parts.length; i++) {{
-                        testInput[i] = Integer.parseInt(parts[i].trim());
-                    }}
-                    
-                    int result = {func_name}(testInput);
-                    System.out.println(result);
-                }} catch (Exception e) {{
-                    System.out.println("ERROR: " + e.getMessage());
-                }}
+            if (line.isEmpty()) continue;
+
+            // Simple JSON-array parser: "[1,2,3]" → int[]{{1,2,3}}
+            String inside = line.substring(1, line.length() - 1).trim();
+            int[] nums;
+            if (inside.isEmpty()) {{
+                nums = new int[0];
+            }} else {{
+                nums = Arrays.stream(inside.split(","))
+                             .map(String::trim)
+                             .mapToInt(Integer::parseInt)
+                             .toArray();
             }}
+
+            // Call the user function
+            int result = {func_name}(nums);
+
+            // Print the result
+            System.out.println(result);
         }}
     }}
 }}
-"""
-        
+""".format(user_code=clean_code, func_name=func_name)
         elif language == 'cpp':
-            # C++ batch template
             batch_code = f"""
 #include <iostream>
 #include <vector>
 #include <sstream>
 #include <string>
 #include <algorithm>
-
 using namespace std;
-
 {clean_code}
-
 int main() {{
     string line;
     while (getline(cin, line)) {{
         if (line.empty()) continue;
-        
         try {{
-            // Parse input vector [1,2,3] format
             line.erase(remove(line.begin(), line.end(), '['), line.end());
             line.erase(remove(line.begin(), line.end(), ']'), line.end());
             line.erase(remove(line.begin(), line.end(), ' '), line.end());
-            
             vector<int> testInput;
             stringstream ss(line);
             string num;
-            
             while (getline(ss, num, ',')) {{
                 if (!num.empty()) {{
                     testInput.push_back(stoi(num));
                 }}
             }}
-            
             auto result = {func_name}(testInput);
             cout << result << endl;
         }} catch (const exception& e) {{
@@ -1224,26 +1366,19 @@ int main() {{
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        
-        # Prepare input data for all test cases
         input_lines = []
         for test_case in test_cases:
             test_input = test_case.get('input', [])
-            # Convert string input to proper data type
             if isinstance(test_input, str):
                 try:
                     test_input = json.loads(test_input)
                 except:
-                    pass  # Keep as string if not valid JSON
-            
+                    pass
             if language in ['python', 'javascript']:
                 input_lines.append(json.dumps(test_input))
-            else:  # java, cpp
+            else:
                 input_lines.append(str(test_input))
-        
         stdin_data = '\n'.join(input_lines)
-        
-        # Prepare Piston API request
         piston_request = {
             'language': lang_config['lang'],
             'version': lang_config['version'],
@@ -1254,20 +1389,17 @@ int main() {{
                 }
             ],
             'stdin': stdin_data,
-            'compile_timeout': 8000,  # 8 seconds
-            'run_timeout': 10000,     # 10 seconds
+            'compile_timeout': 8000,
+            'run_timeout': 10000,
             'compile_memory_limit': -1,
             'run_memory_limit': -1
         }
-        
-        # Execute batch request
         response = requests.post(
             f'{PISTON_API}/execute',
             headers={'Content-Type': 'application/json'},
             json=piston_request,
-            timeout=20  # Generous timeout for batch execution
+            timeout=20
         )
-        
         if response.status_code != 200:
             return {
                 'success': False,
@@ -1276,10 +1408,7 @@ int main() {{
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        
         result = response.json()
-        
-        # Check for compilation errors
         if result.get('compile', {}).get('stderr'):
             return {
                 'success': False,
@@ -1288,8 +1417,6 @@ int main() {{
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        
-        # Check for runtime errors
         if result.get('run', {}).get('stderr'):
             return {
                 'success': False,
@@ -1298,22 +1425,14 @@ int main() {{
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        
-        # Parse batch output
         output = result.get('run', {}).get('stdout', '').strip()
         output_lines = output.split('\n') if output else []
-        
-        # Process results for each test case
         test_results = []
         tests_passed = 0
-        
         for i, test_case in enumerate(test_cases):
             expected = test_case.get('expected_output') or test_case.get('expected', '')
-            
             if i < len(output_lines):
                 actual = output_lines[i].strip()
-                
-                # Check for error output
                 if actual.startswith('ERROR:'):
                     test_results.append({
                         'test_number': i + 1,
@@ -1323,26 +1442,19 @@ int main() {{
                         'expected': expected
                     })
                 else:
-                    # Parse JSON output and compare properly
                     try:
-                        # Try to parse the JSON output back to Python object
                         parsed_actual = json.loads(actual)
                     except (json.JSONDecodeError, ValueError):
-                        # If JSON parsing fails, check if it's a special case like "null" or "None"
                         actual_lower = actual.lower().strip()
                         if actual_lower == 'none':
                             parsed_actual = None
                         elif actual_lower == 'null':
                             parsed_actual = None
                         else:
-                            # If not valid JSON, treat as string
                             parsed_actual = actual
-                    
-                    # Smart comparison that handles different data types
                     passed = compare_outputs_smart(parsed_actual, expected)
                     if passed:
                         tests_passed += 1
-                    
                     test_results.append({
                         'test_number': i + 1,
                         'passed': passed,
@@ -1351,7 +1463,6 @@ int main() {{
                         'expected': expected
                     })
             else:
-                # Missing output for this test case
                 test_results.append({
                     'test_number': i + 1,
                     'passed': False,
@@ -1359,19 +1470,14 @@ int main() {{
                     'output': None,
                     'expected': expected
                 })
-        
         result = {
             'success': True,
             'tests_passed': tests_passed,
             'total_tests': len(test_cases),
             'test_results': test_results
         }
-        
-        # Cache successful batch execution
         set_cached_batch_execution(code, language, test_cases, result, func_name)
-        
         return result
-        
     except requests.RequestException as e:
         return {
             'success': False,
@@ -1883,6 +1989,21 @@ def register():
 def logout():
     logout_user()
     return redirect('/')
+
+def get_all_available_challenges():
+    """Return a list of all available challenges across all languages and difficulties."""
+    # This function should aggregate all challenges from the database.
+    # You may need to adjust this logic to match your DB schema.
+    all_challenges = []
+    for lang in PISTON_LANGUAGES.keys():
+        for diff in ['basic', 'intermediate', 'advanced']:
+            try:
+                challenges = get_challenges_by_language_difficulty(lang, diff)
+                if challenges:
+                    all_challenges.extend(challenges)
+            except Exception:
+                continue
+    return all_challenges
 
 if __name__ == '__main__':
     print("🔌 Testing database connection...")
