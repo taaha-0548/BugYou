@@ -211,33 +211,33 @@ for raw in test_inputs:
         'template': Template('''$user_code
 
 const rl = require('readline')
-  .createInterface({ input: process.stdin, output: process.stdout });
+  .createInterface({{ input: process.stdin, output: process.stdout }});
 const lines = [];
 rl.on('line', l => lines.push(l));
-rl.on('close', async () => {
-  for (const raw of lines) {
-    try {
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
       const t = JSON.parse(raw);
       let result;
-      if (t && t.__args__) {
+      if (t && t.__args__) {{
         result = await $func_name(...t.__args__);
-      } else if (t && t.__kwargs__) {
+      }} else if (t && t.__kwargs__) {{
         result = await $func_name(t.__kwargs__);
-      } else if (Array.isArray(t)) {
+      }} else if (Array.isArray(t)) {{
         result = await $func_name(t);
-      } else {
+      }} else {{
         result = await $func_name(t);
-      }
+      }}
 
       const out = (t && t.__void__)
         ? JSON.stringify(t.__args__ || t)
         : JSON.stringify(result);
       console.log(out);
-    } catch (e) {
+    }} catch (e) {{
       console.log("ERROR: " + e.message);
-    }
-  }
-});
+    }}
+  }}
+}});
 ''')
     },
     'java': {
@@ -260,7 +260,7 @@ public class Main {{
             if (line.isEmpty()) continue;
             try {{
                 Object result;
-                boolean isVoid = line.contains("\"__void__\":true");
+                boolean isVoid = line.contains("\\\"__void__\\\":true");
                 // Multi-arg: {{"__args__":[...]}}
 
                 if (line.startsWith("{{") && line.contains("__args__")) {{
@@ -332,33 +332,19 @@ public class Main {{
         'filename': 'main.cpp',
         'template': '''
 #include <bits/stdc++.h>
+
 using namespace std;
 
 {user_code}
 
-vector<int> parse_vec(const string& s) {{
-    vector<int> v;
-    stringstream ss(s.substr(1, s.size() - 2)); // remove {{ and }}
-    string num;
-    while (getline(ss, num, ',')) {{
-        if (!num.empty()) v.push_back(stoi(num));
-    }}
-    return v;
-}}
-
 int main() {{
-    string line;
-    while (getline(cin, line)) {{
-        vector<int> testInput = parse_vec(line);
-        auto result = {func_name}(testInput);
-        cout << result << endl;
-    }}
+    vector<int> testInput = {test_input};
+    auto result = {func_name}(testInput);
+    cout << result << endl;
     return 0;
 }}
 '''
-    },
-    
-    
+    }
 }
 
 def get_cache_key(code, language, test_cases):
@@ -974,18 +960,11 @@ def check_code_compilation(code, language, config):
                 null_value = '{1, 2, 3}'  # Safe default for C++ (not empty)
             else:
                 null_value = 'null'
-            if language == 'cpp':
-                test_code = lang_config['template'].format(
-                    user_code=clean_code,
-                    func_name=func_name,
-                    test_input='std::vector<int>{1,2,3}'
-                )
-            else:
-                test_code = lang_config['template'].substitute(
-                    user_code=clean_code,
-                    test_input=null_value,
-                    func_name=func_name
-                )
+            test_code = lang_config['template'].format(
+                user_code=clean_code,
+                test_input=null_value,
+                func_name=func_name
+            )
         
         # Validate filename to prevent double extension issues
         filename = lang_config['filename']
@@ -1235,54 +1214,150 @@ def run_all_tests_in_batch(code, language, test_cases, func_name):
                 'total_tests': len(test_cases),
                 'test_results': []
             }
-        # Clean user code
+         # Clean user code
         clean_code = clean_user_code(code, language)
-        input_lines = []
-        for test_case in test_cases:
-            test_input = test_case.get('input', [])
-            if isinstance(test_input, str):
-                try:
-                    test_input = json.loads(test_input)
-                except:
-                    pass
-            if language == 'cpp':
-                # Format as C++ vector initializer
-                if isinstance(test_input, list):
-                    cpp_input = '{' + ', '.join(map(str, test_input)) + '}'
-                else:
-                    cpp_input = '{' + str(test_input) + '}'
-                input_lines.append(cpp_input)
-            elif language in ['python', 'javascript']:
-                input_lines.append(json.dumps(test_input))
-            else:
-                input_lines.append(str(test_input))
-        stdin_data = '\n'.join(input_lines)
-        # Prepare code using the template
-        if language in ['python', 'javascript']:
-            # For batch, pass all test cases as stdin lines, template expects $user_code, $func_name, $test_inputs
-            batch_code = lang_config['template'].substitute(
-                user_code=clean_code,
-                func_name=func_name,
-                test_inputs=f"[{', '.join(input_lines)}]"
-            )
+        
+        # Create batch test code based on language
+        if language == 'python':
+            batch_code = f"""
+import sys
+import json
+
+{clean_code}
+
+test_inputs = []
+for line in sys.stdin:
+    line = line.strip()
+    if line:
+        test_inputs.append(json.loads(line))
+for raw in test_inputs:
+    try:
+        # support __args__ (list), __kwargs__ (dict), list, single
+        if isinstance(raw, dict) and "__args__" in raw:
+            result = {func_name}(*raw["__args__"])
+        elif isinstance(raw, dict) and "__kwargs__" in raw:
+            result = {func_name}(**raw["__kwargs__"])
+        elif isinstance(raw, list):
+            try: result = {func_name}(*raw)
+            except TypeError: result = {func_name}(raw)
+        else:
+            result = {func_name}(raw)
+        # void: echo args back
+        if isinstance(raw, dict) and raw.get("__void__"):
+            obj = raw.get("__args__", raw)
+        else:
+            obj = result
+        print(json.dumps(obj, default=str))
+    except Exception as e:
+        print("ERROR: " + str(e))
+"""
+        
+        elif language == 'javascript':
+            batch_code = f"""
+{clean_code}
+
+const rl = require('readline')
+  .createInterface({{ input: process.stdin, output: process.stdout }});
+const lines = [];
+rl.on('line', l => lines.push(l));
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
+      const t = JSON.parse(raw);
+      let result;
+      if (t && t.__args__) {{
+        result = await {func_name}(...t.__args__);
+      }} else if (t && t.__kwargs__) {{
+        result = await {func_name}(t.__kwargs__);
+      }} else if (Array.isArray(t)) {{
+        result = await {func_name}(t);
+      }} else {{
+        result = await {func_name}(t);
+      }}
+
+      const out = (t && t.__void__)
+        ? JSON.stringify(t.__args__ || t)
+        : JSON.stringify(result);
+      console.log(out);
+    }} catch (e) {{
+      console.log("ERROR: " + e.message);
+    }}
+  }}
+}});
+"""
         elif language == 'java':
-            # Use the template, fill in user_code and func_name
-            batch_code = lang_config['template'].replace('{user_code}', clean_code).replace('{func_name}', func_name)
+            batch_code = """
+import java.io.*;
+import java.util.*;
+import java.util.stream.*;
+
+public class Main {{
+    // === User's method ===
+{user_code}
+    // =====================
+
+    public static void main(String[] args) throws Exception {{
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line;
+        while ((line = br.readLine()) != null) {{
+            line = line.trim();
+            if (line.isEmpty()) continue;
+
+            // Simple JSON-array parser: "[1,2,3]" → int[]{{1,2,3}}
+            String inside = line.substring(1, line.length() - 1).trim();
+            int[] nums;
+            if (inside.isEmpty()) {{
+                nums = new int[0];
+            }} else {{
+                nums = Arrays.stream(inside.split(","))
+                             .map(String::trim)
+                             .mapToInt(Integer::parseInt)
+                             .toArray();
+            }}
+
+            // Call the user function
+            int result = {func_name}(nums);
+
+            // Print the result
+            System.out.println(result);
+        }}
+    }}
+}}
+""".format(user_code=clean_code, func_name=func_name)
         elif language == 'cpp':
-            # For the new simple C++ template, just fill user_code, func_name, and test_input
-            lang_config = PISTON_LANGUAGES[language]
-            batch_code = lang_config['template'].format(
-                user_code=clean_code,
-                func_name=func_name,
-                test_input=input_lines[0] if input_lines else 'std::vector<int>{}'
-            )
-        elif language == 'java':
-            # For the new Java template, just fill user_code and func_name
-            lang_config = PISTON_LANGUAGES[language]
-            batch_code = lang_config['template'].format(
-                user_code=clean_code,
-                func_name=func_name
-            )
+            batch_code = f"""
+#include <iostream>
+#include <vector>
+#include <sstream>
+#include <string>
+#include <algorithm>
+using namespace std;
+{clean_code}
+int main() {{
+    string line;
+    while (getline(cin, line)) {{
+        if (line.empty()) continue;
+        try {{
+            line.erase(remove(line.begin(), line.end(), '['), line.end());
+            line.erase(remove(line.begin(), line.end(), ']'), line.end());
+            line.erase(remove(line.begin(), line.end(), ' '), line.end());
+            vector<int> testInput;
+            stringstream ss(line);
+            string num;
+            while (getline(ss, num, ',')) {{
+                if (!num.empty()) {{
+                    testInput.push_back(stoi(num));
+                }}
+            }}
+            auto result = {func_name}(testInput);
+            cout << result << endl;
+        }} catch (const exception& e) {{
+            cout << "ERROR: " << e.what() << endl;
+        }}
+    }}
+    return 0;
+}}
+"""
         else:
             return {
                 'success': False,
@@ -1291,6 +1366,19 @@ def run_all_tests_in_batch(code, language, test_cases, func_name):
                 'total_tests': len(test_cases),
                 'test_results': []
             }
+        input_lines = []
+        for test_case in test_cases:
+            test_input = test_case.get('input', [])
+            if isinstance(test_input, str):
+                try:
+                    test_input = json.loads(test_input)
+                except:
+                    pass
+            if language in ['python', 'javascript']:
+                input_lines.append(json.dumps(test_input))
+            else:
+                input_lines.append(str(test_input))
+        stdin_data = '\n'.join(input_lines)
         piston_request = {
             'language': lang_config['lang'],
             'version': lang_config['version'],
