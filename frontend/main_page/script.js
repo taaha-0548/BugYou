@@ -646,7 +646,7 @@ function showTestCase(index, context = 'main') {
         // Display actual output if test has been run and completed
         if (testResults && testResults[index] && testResults[index].status !== 'running') {
             actualOutputSection.style.display = 'block';
-            let actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+            let actualOutput = testResults[index].actual !== undefined ? testResults[index].actual : 'No output';
             // Only for Actual Output: pretty-print arrays/objects
             try {
                 if (typeof actualOutput === 'string' && (actualOutput.trim().startsWith('[') || actualOutput.trim().startsWith('{'))) {
@@ -1609,7 +1609,7 @@ async function submitSolution() {
             code: code,
             language: currentLanguage,
             challenge_id: currentChallenge.challenge_id,
-            difficulty: currentDifficulty,
+            difficulty: currentChallenge.difficulty,
             username: username  // Include username for XP rewards
         };
 
@@ -1642,43 +1642,47 @@ async function submitSolution() {
             if (Array.isArray(data.test_results)) {
                 testResults = data.test_results;
                 console.log("passed");
-                updateTestResults();                   // keep your main panel in sync
-              
-                              // <-- Show the results panel after successful submission
+                updateTestResults();
             }
-            // Success! Show XP rewards
+            // Only show modal if all tests passed
             showSubmissionModal(data);
-            
-        
-            // Mark challenge as completed and award XP if not already completed
-            console.log(`🔍 Debug completion conditions:`);
-            console.log(`   XP Reward: ${data.xp_reward ? 'Available' : 'Not available'}`);
-            console.log(`   Already Completed: ${data.already_completed ? 'Yes' : 'No'}`);
-            console.log(`   Current Score: ${score}`);
-            
-            if (!data.already_completed) {
-                console.log(`✅ Will mark challenge as completed in 4 seconds with time: ${finalTime}s and score: ${score}`);
-                setTimeout(() => {
-                    markChallengeAsCompletedWithTime(finalTime, score);
-                }, 4000); // 4 second delay to prevent race conditions
+            // Only award XP if not already completed (backend) and not already solved (frontend)
+            if (!data.already_completed && !(currentChallenge && currentChallenge.is_solved)) {
+                console.log(`✅ Marking challenge as completed with time: ${finalTime}s and score: ${score}`);
+                markChallengeAsCompletedWithTime(finalTime, score);
             } else {
-                console.log(`⚠️ Challenge already completed - no XP awarded`);
+                console.log(`⚠️ Challenge already completed - not calling /api/challenge/complete`);
             }
-        } else if (data.success && !data.all_passed) {
-            // Partial success - some tests passed or only hidden tests failed
-            // Always update testResults and UI with backend results
-            if (Array.isArray(data.test_results)) {
+        } else if (data.success && Array.isArray(data.test_results)) {
+            // Check if all visible test cases passed but some hidden failed
+            // Assume visible test cases are always first in the array
+            const numVisible = testCases.length;
+            const visiblePassed = data.test_results.slice(0, numVisible).every(r => r && r.passed);
+            const hiddenFailed = data.test_results.slice(numVisible).some(r => r && !r.passed);
+            if (visiblePassed && hiddenFailed) {
                 testResults = data.test_results;
                 updateTestResults();
                 updateActiveTestCaseButton();
+                showResultsNotification('Warning', 'Failed on hidden test cases.', 'warning');
+            } else {
+                // Partial success - some visible tests failed or only hidden tests failed
+                if (Array.isArray(data.test_results)) {
+                    testResults = data.test_results;
+                    updateTestResults();
+                    updateActiveTestCaseButton();
+                }
+                // Only show warning if some tests failed
+                const testsPassedCount = data.test_results.filter(r => r && r.passed).length;
+                const totalTestsCount = data.test_results.length;
+                const failedTests = totalTestsCount - testsPassedCount;
+                if (failedTests > 0) {
+                    showResultsNotification('Partial Success', 'Some tests passed, but not all', 'warning');
+                }
             }
-            showSubmissionModal(data);
-            showResultsNotification('Partial Success', 'Some tests passed, but not all', 'warning');
         } else {
             // Failed - deduct points
             // Timer continues running for failed submissions
             console.log(`⏱️ Failed submission! Timer continues...`);
-            
             score = Math.max(2, score - 3); // Deduct 3 points but keep minimum at 2
             updateScore();
             // Update testResults and UI with backend results
@@ -1930,6 +1934,13 @@ async function runTests() {
             language: currentLanguage,
             test_cases: testCases
         };
+        // Add challenge_id and difficulty if available
+        if (currentChallenge && currentChallenge.challenge_id) {
+            requestData.challenge_id = currentChallenge.challenge_id;
+        }
+        if (currentChallenge && currentChallenge.difficulty) {
+            requestData.difficulty = currentChallenge.difficulty;
+        }
 
         // Execute tests with optimized timeout for batch execution
         const controller = new AbortController();
@@ -1970,9 +1981,10 @@ async function runTests() {
                 // Cache results for optimization (for submitSolution)
                 lastRunCode = code;
                 lastRunResults = [...testResultsArray]; // Deep copy
-                const testsPassedCount = data.tests_passed || 0;
-                const totalTestsCount = data.total_tests || testResultsArray.length;
-                lastRunAllPassed = (testsPassedCount === totalTestsCount);
+                // Calculate passed/total tests from testResultsArray
+                const testsPassedCount = testResultsArray.filter(r => r && r.passed).length;
+                const totalTestsCount = testResultsArray.length;
+                lastRunAllPassed = (testsPassedCount === totalTestsCount && totalTestsCount > 0);
                 
                 // Show test status now that results are available
                 const testStatusElement = document.getElementById('testStatus');
@@ -1985,11 +1997,13 @@ async function runTests() {
                 
                 // Show success/failure message
                 if (lastRunAllPassed) {
-                    // Removed notification: showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
+                    showResultsNotification('Success', 'All visible test cases passed! Try submitting your solution.', 'success');
                 } else {
                     const failedTests = totalTestsCount - testsPassedCount;
-                    const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
-                    showResultsNotification('Warning', failMessage, 'warning');
+                    if (failedTests > 0) {
+                        const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
+                        showResultsNotification('Warning', failMessage, 'warning');
+                    }
                 }
             } else {
                 testResults = [];  // Reset test results on error

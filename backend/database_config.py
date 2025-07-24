@@ -146,7 +146,7 @@ def get_challenges_by_language_difficulty(language, difficulty):
     return db.execute_query(query)
 
 def get_challenge_by_id(language, difficulty, challenge_id):
-    """Get a specific challenge with all its details including test cases"""
+    """Get a specific challenge with all its details including test cases and driver_code"""
     table_name = get_table_name(language, difficulty)
     db = DatabaseManager()
     query = f"""
@@ -176,6 +176,7 @@ def get_challenge_by_id(language, difficulty, challenge_id):
             hidden_test_1_expected,
             hidden_test_2_input,
             hidden_test_2_expected,
+            driver_code,
             success_rate,
             avg_attempts
         FROM {table_name}
@@ -214,6 +215,9 @@ def get_challenge_by_id(language, difficulty, challenge_id):
                         test_input = '[1, 2, 3]'  # Default vector input
                     if test_expected is None or test_expected == '':
                         test_expected = '3'  # Default expected output
+                    # Convert [1, 2, 3] to {1,2,3} for C++
+                    if isinstance(test_input, str) and test_input.startswith('['):
+                        test_input = '{' + test_input.strip('[]').replace(' ', '') + '}'
                 else:
                     # For other languages, use reasonable defaults
                     if test_input is None or test_input == '':
@@ -237,7 +241,7 @@ def get_challenge_by_id(language, difficulty, challenge_id):
             # Create a default test case based on language
             if language == 'cpp':
                 test_cases.append({
-                    'input': '[1, 2, 3]',
+                    'input': '{1,2,3}',
                     'expected_output': '3'
                 })
             else:
@@ -248,6 +252,25 @@ def get_challenge_by_id(language, difficulty, challenge_id):
         
         # Add test cases array to challenge
         challenge['test_cases'] = test_cases
+
+        # Extract hidden test cases from the challenge record
+        hidden_test_cases = []
+        for i in range(1, 3):  # Up to 2 hidden test cases
+            input_key = f'hidden_test_{i}_input'
+            expected_key = f'hidden_test_{i}_expected'
+            test_input = challenge.get(input_key)
+            test_expected = challenge.get(expected_key)
+            if test_input is not None or test_expected is not None:
+                hidden_test_cases.append({
+                    'input': test_input,
+                    'expected_output': test_expected
+                })
+            # Clean up the individual hidden test case fields
+            if input_key in challenge:
+                del challenge[input_key]
+            if expected_key in challenge:
+                del challenge[expected_key]
+        challenge['hidden_test_cases'] = hidden_test_cases
         
         return challenge
     return None
@@ -329,7 +352,8 @@ def insert_challenge(language, difficulty, data):
         'test_case_4_input', 'test_case_4_expected',
         'test_case_5_input', 'test_case_5_expected',
         'hidden_test_1_input', 'hidden_test_1_expected',
-        'hidden_test_2_input', 'hidden_test_2_expected'
+        'hidden_test_2_input', 'hidden_test_2_expected',
+        'driver_code'
     ]
     # Prepare values from data
     values = [
@@ -358,6 +382,7 @@ def insert_challenge(language, difficulty, data):
         data['hidden_test_cases'][0]['expected'] if len(data['hidden_test_cases']) > 0 else None,
         data['hidden_test_cases'][1]['input'] if len(data['hidden_test_cases']) > 1 else None,
         data['hidden_test_cases'][1]['expected'] if len(data['hidden_test_cases']) > 1 else None,
+        data.get('driver_code')
     ]
     placeholders = ', '.join(['%s'] * len(columns))
     colnames = ', '.join(columns)
