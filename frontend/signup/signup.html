@@ -1,62 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BugYou - Sign Up</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./signup.css" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
-    rel="stylesheet">
 </head>
 
 <body>
-
-  <video autoplay muted loop id="bg-video">
-    <source src="/assets/login.mp4" type="video/mp4" />
-    Your browser does not support the video tag.
-  </video>
-
-  <div class="overlay">
+  <div class="content">
     <header class="navbar">
       <div class="logo">
-        <img src="/assets/logo.png" alt="BugYou Logo" />
-        BugYou
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <span class="logo-text">BugYou</span>
       </div>
       <nav>
-        <a href="#">About us</a>
-        <a href="#">Guide</a>
-        <a href="#">Contact</a>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <a href="/guide">Guide</a>
+        <a href="/login">Login</a>
+        <a href="/signup">Sign Up</a>
       </nav>
     </header>
 
-    <main class="content">
-      <div class="left">
-        <h1 id="typewriter-text" class="typewriter-line"></h1>
-        <p class="glitch-text" data-text="Upskill your programming skills and compete against others ">
-          Upskill your programming skills and compete against others
-        </p>
-        <br>
-        <p class="single-line-text">
-          Already have an account? <a href="/login" class="login-link">Login.</a>
-        </p>
-      </div>
+    <main class="signup-content">
+      <div class="signup-container">
+        <div class="signup-header">
+          <h1 class="main-title">Sign Up</h1>
+          <p class="subtitle">Upskill your programming skills and compete against others</p>
+        </div>
 
-      <div class="right">
-        <form class="signup-form">
-          <h2>Sign up</h2>
-          <input type="email" placeholder="Email address" required />
-          <input type="text" placeholder="Username" required />
-          <input type="text" placeholder="Full Name" required />
-          <input type="password" placeholder="Password" required />
-          <button type="submit">Sign up →</button>
+        <form method="POST" class="signup-form">
+          <div class="form-group">
+            <label for="fullname">Full Name</label>
+            <input type="text" id="fullname" name="fullname" class="input" placeholder="Enter your full name" required>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="input" placeholder="Enter your email" required>
+          </div>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" class="input" placeholder="Choose a username" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="input" placeholder="Create a password" required>
+          </div>
+
+          <button type="submit" class="btn">Sign Up →</button>
+          
+          <div class="form-footer">
+            <p>Already have an account? <a href="/login" class="link">Login.</a></p>
+          </div>
         </form>
       </div>
     </main>
   </div>
-
-  <script src="./signup.js"></script>
 </body>
-
 </html>

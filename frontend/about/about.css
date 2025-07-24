@@ -1,0 +1,374 @@
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow-x: hidden;
+  font-family: 'Press Start 2P', cursive;
+  background-color: #0D0D0D;
+  color: white;
+}
+
+.content {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  padding: 2rem;
+  background: rgba(13, 13, 13, 0.1);
+}
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.4);    
+  backdrop-filter: blur(10px);          
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  margin-bottom: 3rem;
+}
+
+.navbar nav a {
+  margin-left: 1.5rem;
+  text-decoration: none;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.navbar nav a:hover {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  transform: scale(1.1);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; 
+}
+
+.logo-img {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 0 10px #10B981);
+}
+
+.logo-text {
+  font-size: 1rem;
+  text-shadow: 0 0 10px #10B981;
+}
+
+/* User Profile Section */
+.user-profile {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.user-info:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  transform: translateY(-1px);
+}
+
+.user-info i {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  font-size: 0.8rem;
+}
+
+.user-info span {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* Main content */
+.about-content {
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.main-title {
+  font-size: 2.5rem;
+  color: #10B981;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  margin-bottom: 3rem;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes titleGlow {
+  from { text-shadow: 0 0 20px #10B981, 0 0 40px #10B981; }
+  to { text-shadow: 0 0 30px #10B981, 0 0 60px #10B981; }
+}
+
+/* Description section */
+.description {
+  background: rgba(16, 185, 129, 0.05);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  padding: 2rem;
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  margin-bottom: 2rem;
+}
+
+.text-block {
+  margin-bottom: 2rem;
+}
+
+.text-block p {
+  line-height: 1.8;
+  font-size: 0.7rem;
+  color: #e2e2e2;
+  margin-bottom: 1rem;
+}
+
+.highlight {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+}
+
+/* Features and Benefits Lists */
+.features-list, .benefits-list {
+  margin: 2rem 0;
+}
+
+.feature-item, .benefit-item {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: all 0.3s ease;
+}
+
+.feature-item:hover, .benefit-item:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.feature-text, .benefit-text {
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: #e2e2e2;
+  text-align: left;
+}
+
+/* Closing section */
+.closing {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.closing p {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #a3f7bf;
+  text-shadow: 0 0 8px #10B981;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.btn {
+  padding: 1.2rem 2rem;
+  background: #10B981;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #0D0D0D;
+  box-shadow: 0 0 20px #10B981;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn:hover {
+  background: #0f966c;
+  box-shadow: 0 0 40px #0f966c;
+  transform: translateY(-3px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s;
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: #10B981;
+  border: 2px solid #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn.secondary:hover {
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+}
+
+/* Developer Section */
+.developer-section {
+  margin: 3rem 0;
+  text-align: center;
+}
+
+.developer-title {
+  font-size: 1.5rem;
+  color: #10B981;
+  text-shadow: 0 0 15px #10B981;
+  margin-bottom: 2rem;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+.developer-card {
+  background: rgba(16, 185, 129, 0.1);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  backdrop-filter: blur(6px);
+  transition: all 0.3s ease;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.developer-card:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+}
+
+.linkedin-badge {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.developer-name {
+  font-size: 1rem;
+  color: #10B981;
+  text-shadow: 0 0 10px #10B981;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+.developer-role {
+  font-size: 0.7rem;
+  color: #e2e2e2;
+  opacity: 0.8;
+}
+
+.linkedin-logo {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.linkedin-logo a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover {
+  transform: translateY(-2px);
+}
+
+.profile-pic {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover .profile-pic {
+  transform: scale(1.1);
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+}
+
+.linkedin-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10B981;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.linkedin-logo a:hover .linkedin-icon {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #0f966c;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  text-shadow: 0 0 8px #10B981;
+}
+
+/* LinkedIn Badge Customization */
+.badge-base {
+  background: transparent !important;
+}
+
+.badge-base__link {
+  color: #10B981 !important;
+  text-decoration: none !important;
+  font-family: 'Press Start 2P', cursive !important;
+  font-size: 0.8rem !important;
+  transition: all 0.3s ease !important;
+}
+
+.badge-base__link:hover {
+  color: #0f966c !important;
+  text-shadow: 0 0 8px #10B981 !important;
+}

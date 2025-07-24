@@ -1,0 +1,299 @@
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  font-family: 'Press Start 2P', cursive;
+  background-color: #0D0D0D;
+  color: white;
+}
+.content {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  height: 100vh; text-align: center; padding: 2rem;
+  background: rgba(13, 13, 13, 0.1);
+}
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 3rem;
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+
+.logo-img {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 1rem;
+  filter: drop-shadow(0 0 20px #10B981) drop-shadow(0 0 40px #10B981);
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+
+.logo-text {
+  font-size: 3rem;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+@keyframes logoGlow {
+  from { text-shadow: 0 0 20px #10B981, 0 0 40px #10B981; }
+  to { text-shadow: 0 0 30px #10B981, 0 0 60px #10B981; }
+}
+.tagline {
+  font-size: 1rem; color: #a3f7bf;
+  text-shadow: 0 0 10px #10B981;
+  margin-bottom: 1rem;
+}
+.subtitle {
+  font-size: 0.7rem; color: #6ee7b7; opacity: 0.8;
+  text-shadow: 0 0 8px #10B981;
+  margin-bottom: 2rem;
+}
+.buttons {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  justify-content: center;
+}
+.btn {
+  padding: 1.2rem 2rem; background: #10B981; border: none; border-radius: 8px;
+  font-family: 'Press Start 2P', cursive; font-size: 0.7rem; color: #0D0D0D;
+  box-shadow: 0 0 20px #10B981; cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+}
+.btn:hover {
+  background: #0f966c; box-shadow: 0 0 40px #0f966c;
+  transform: translateY(-3px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s;
+}
+.btn:hover::before {
+  left: 100%;
+}
+
+.secondary-buttons {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: #10B981;
+  border: 2px solid #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn.secondary:hover {
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+}
+
+.game-info {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5rem;
+  color: #6ee7b7;
+  opacity: 0.6;
+}
+
+/* Welcome Section Styles */
+.welcome-section {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.welcome-title {
+  font-size: 1.5rem;
+  color: #10B981;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  margin-bottom: 0.5rem;
+  animation: logoGlow 2s ease-in-out infinite alternate;
+}
+
+.welcome-subtitle {
+  font-size: 0.8rem;
+  color: #a3f7bf;
+  text-shadow: 0 0 8px #10B981;
+}
+
+/* Profile Section Styles */
+.profile-section {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-card {
+  background: rgba(16, 185, 129, 0.1);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+  transition: all 0.3s ease;
+  min-width: 300px;
+}
+
+.profile-card:hover {
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.3);
+  transform: translateY(-2px);
+}
+
+.profile-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 6px;
+  font-size: 0.6rem;
+  color: #6ee7b7;
+  text-shadow: 0 0 4px #10B981;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.profile-card:hover .profile-hint {
+  opacity: 1;
+}
+
+.profile-hint i {
+  color: #10B981;
+  text-shadow: 0 0 6px #10B981;
+}
+
+.profile-info h3 {
+  font-size: 1rem;
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+}
+
+.profile-label {
+  color: #6ee7b7;
+  text-shadow: 0 0 6px #10B981;
+}
+
+.profile-value {
+  color: #10B981;
+  font-weight: bold;
+  text-shadow: 0 0 6px #10B981;
+}
+
+.xp-progress-container {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.xp-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.xp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10B981, #059669);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.xp-progress-text {
+  text-align: center;
+  margin-top: 5px;
+  font-size: 0.8em;
+  color: #6ee7b7;
+  text-shadow: 0 0 4px #10B981;
+}
+
+/* Top Navigation Styles */
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  z-index: 1000;
+  background: rgba(13, 13, 13, 0.9);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.top-left {
+  margin-right: auto;
+}
+
+.top-right {
+  margin-left: auto;
+}
+
+.top-nav .btn {
+  min-width: auto;
+  padding: 0.8rem 1.5rem;
+  font-size: 0.6rem;
+}
+
+.top-nav .btn.secondary {
+  background: transparent;
+  color: #10B981;
+  border: 2px solid #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.top-nav .btn.secondary:hover {
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+}
+
+.top-nav .btn:not(.secondary) {
+  background: #10B981;
+  color: #0D0D0D;
+  border: none;
+  box-shadow: 0 0 20px #10B981;
+}
+
+.top-nav .btn:not(.secondary):hover {
+  background: #0f966c;
+  box-shadow: 0 0 40px #0f966c;
+}

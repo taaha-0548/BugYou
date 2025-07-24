@@ -24,3 +24,41 @@ function type() {
 }
 
 window.onload = type;
+
+// Simple login functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('.login-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const username = form.username.value.trim();
+    const password = form.password.value;
+    
+    if (!username || !password) {
+      alert('Please enter both username and password.');
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // Store user data
+        localStorage.setItem('currentUser', username);
+        window.location.href = '/';
+      } else {
+        alert(data.error || 'Login failed.');
+      }
+    } catch (err) {
+      alert('Network error. Please try again.');
+    }
+  });
+});

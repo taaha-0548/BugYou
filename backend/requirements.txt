@@ -9,8 +9,12 @@ SQLAlchemy==2.0.25
 
 # Authentication & Security
 bcrypt==4.1.2
+flask-bcrypt==1.0.1
 PyJWT==2.8.0
 flask-jwt-extended==4.6.0
+flask-login==0.6.3
+flask-wtf==1.2.1
+wtforms==3.1.1
 
 # Environment management
 python-dotenv==1.0.0

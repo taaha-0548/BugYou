@@ -10,8 +10,8 @@ from datetime import datetime
 import os
 import re
 import time
-import json
 from functools import wraps
+import json
 import hashlib
 from string import Template
 # from concurrent.futures import ThreadPoolExecutor  # Removed - using sequential execution to avoid rate limiting
@@ -66,22 +66,6 @@ STATIC_FOLDERS = {
     'leaderboard': '../frontend/leaderboard',  # <-- Add leaderboard folder
 }
 
-# --- Standard headers/imports for each language ---
-STANDARD_HEADERS = {
-    'cpp': '#include <bits/stdc++.h>\nusing namespace std;\n',
-    'python': 'import sys\nimport math\nimport collections\nfrom collections import defaultdict, deque, Counter\nimport heapq\nimport bisect\nimport itertools\nimport functools\nfrom functools import lru_cache\nimport re\nimport string\n',
-    'java': 'import java.util.*;\nimport java.io.*;\nimport java.lang.*;\n',
-    'javascript': '// No special headers needed\n'
-}
-
-# --- Build executable code for the runner ---
-def build_executable_code(user_code, language, driver_code):
-    headers = STANDARD_HEADERS.get(language, '')
-    if language == 'java':
-        # Wrap both user_code and driver_code inside Solution class
-        return f"{headers}\npublic class Solution {{\n{user_code}\n{driver_code}\n}}"
-    else:
-        return f"{headers}\n{user_code}\n{driver_code}"
 
 def sanitize_filename(name: str) -> str:
     base, ext = os.path.splitext(name)
@@ -191,30 +175,186 @@ PISTON_LANGUAGES = {
         'lang': 'python',
         'version': '3.10.0',
         'filename': 'main.py',
+        'template': Template('''import json
+
+$user_code
+
+test_inputs = $test_inputs
+for raw in test_inputs:
+    try:
+        # support __args__ (list), __kwargs__ (dict), list, single
+        if isinstance(raw, dict) and "__args__" in raw:
+            result = $func_name(*raw["__args__"])
+        elif isinstance(raw, dict) and "__kwargs__" in raw:
+            result = $func_name(**raw["__kwargs__"])
+        elif isinstance(raw, list):
+            try: result = $func_name(*raw)
+            except TypeError: result = $func_name(raw)
+        else:
+            result = $func_name(raw)
+
+        # void: echo args back
+        if isinstance(raw, dict) and raw.get("__void__"):
+            obj = raw.get("__args__", raw)
+        else:
+            obj = result
+
+        print(json.dumps(obj, default=str))
+    except Exception as e:
+        print("ERROR: " + str(e))
+''')
     },
-    'javascript': {
+  'javascript': {
         'lang': 'javascript',
         'version': '18.15.0',
         'filename': 'main.js',
+        'template': Template('''$user_code
+
+const rl = require('readline')
+  .createInterface({{ input: process.stdin, output: process.stdout }});
+const lines = [];
+rl.on('line', l => lines.push(l));
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
+      const t = JSON.parse(raw);
+      let result;
+      if (t && t.__args__) {{
+        result = await $func_name(...t.__args__);
+      }} else if (t && t.__kwargs__) {{
+        result = await $func_name(t.__kwargs__);
+      }} else if (Array.isArray(t)) {{
+        result = await $func_name(t);
+      }} else {{
+        result = await $func_name(t);
+      }}
+
+      const out = (t && t.__void__)
+        ? JSON.stringify(t.__args__ || t)
+        : JSON.stringify(result);
+      console.log(out);
+    }} catch (e) {{
+      console.log("ERROR: " + e.message);
+    }}
+  }}
+}});
+''')
     },
     'java': {
         'lang': 'java',
         'version': '15.0.2',
-        'filename': 'Solution.java',  # <-- Change to Solution.java
+        'filename': 'Main.java',
+        'template': '''
+import java.util.*;
+import java.io.*;
+import java.lang.reflect.*;
+
+public class Main {{
+    {user_code}
+
+    public static void main(String[] args) throws Exception {{
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line;
+        while ((line = br.readLine()) != null) {{
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            try {{
+                Object result;
+                boolean isVoid = line.contains("\\\"__void__\\\":true");
+                // Multi-arg: {{"__args__":[...]}}
+
+                if (line.startsWith("{{") && line.contains("__args__")) {{
+                    int idx = line.indexOf("__args__");
+                    int start = line.indexOf('[', idx);
+                    int end = line.indexOf(']', start);
+                    String arrPart = line.substring(start + 1, end);
+                    String[] toks = arrPart.split(",");
+                    List<Object> items = new ArrayList<>();
+                    for (String t : toks) {{
+                        t = t.trim().replaceAll("^\\\"|\\\"$", "");
+                        if (!t.isEmpty()) {{
+                            if (t.matches("^-?\\\\d+$")) items.add(Integer.parseInt(t));
+                            else if (t.matches("^-?\\\\d+\\\\.\\\\d+$")) items.add(Double.parseDouble(t));
+                            else if (t.equalsIgnoreCase("true")||t.equalsIgnoreCase("false")) items.add(Boolean.parseBoolean(t));
+                            else items.add(t);
+                        }}
+                    }}
+                    Class<?>[]  pTypes = new Class<?>[items.size()];
+                    Object[]    pVals  = new Object[items.size()];
+                    for (int i = 0; i < items.size(); i++) {{
+                        Object v = items.get(i);
+                        if (v instanceof Integer) pTypes[i] = int.class;
+                        else if (v instanceof Double) pTypes[i] = double.class;
+                        else if (v instanceof Boolean) pTypes[i] = boolean.class;
+                        else pTypes[i] = String.class;
+                        pVals[i] = v;
+                    }}
+                    Method m = Main.class.getDeclaredMethod("{func_name}", pTypes);
+                    result = m.invoke(null, pVals);
+                }}
+                else if (line.startsWith("[")) {{
+                    String inner = line.substring(1, line.length()-1).trim();
+                    String[] parts = inner.isEmpty() ? new String[0] : inner.split(",");
+                    int[] arr = new int[parts.length];
+                    for (int i = 0; i < parts.length; i++) {{
+                        arr[i] = Integer.parseInt(parts[i].trim());
+                    }}
+                    result = Main.class.getDeclaredMethod("{func_name}", int[].class)
+                                       .invoke(null, (Object)arr);
+                }}
+                else {{
+                    String v = line.replaceAll("\\\"", "").trim();
+                    int iv = Integer.parseInt(v);
+                    result = Main.class.getDeclaredMethod("{func_name}", int.class)
+                                       .invoke(null, iv);
+                }}
+
+                if (isVoid) {{
+                    System.out.println(line);
+                }} else {{
+                    if (result instanceof int[]) {{
+                        System.out.println(Arrays.toString((int[])result));
+                    }} else if (result != null) {{
+                        System.out.println(result.toString());
+                    }}
+                }}
+            }} catch (Exception e) {{
+                System.out.println("ERROR: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
+            }}
+        }}
+    }}
+}}
+'''
     },
     'cpp': {
         'lang': 'cpp',
         'version': '10.2.0',
         'filename': 'main.cpp',
-    },
+        'template': '''
+#include <bits/stdc++.h>
+
+using namespace std;
+
+{user_code}
+
+int main() {{
+    vector<int> testInput = {test_input};
+    auto result = {func_name}(testInput);
+    cout << result << endl;
+    return 0;
+}}
+'''
+    }
 }
 
-def get_cache_key(user_code, language, driver_code):
-    key_str = f"{user_code}::{language}::{driver_code}"
-    return hashlib.md5(key_str.encode()).hexdigest()
+def get_cache_key(code, language, test_cases):
+    """Generate a cache key for code execution"""
+    test_cases_str = json.dumps(test_cases, sort_keys=True)
+    return f"{language}:{hashlib.md5((code + test_cases_str).encode()).hexdigest()}"
 
-def get_cached_execution(user_code, language, driver_code):
-    cache_key = get_cache_key(user_code, language, driver_code)
+def get_cached_execution(code, language, test_cases):
+    """Get cached execution result if available"""
+    cache_key = get_cache_key(code, language, test_cases)
     if cache_key in _execution_cache:
         result, timestamp = _execution_cache[cache_key]
         if time.time() - timestamp < _execution_cache_timeout:
@@ -222,13 +362,15 @@ def get_cached_execution(user_code, language, driver_code):
         del _execution_cache[cache_key]
     return None
 
-def set_cached_execution(user_code, language, driver_code, result):
-    cache_key = get_cache_key(user_code, language, driver_code)
+def set_cached_execution(code, language, test_cases, result):
+    """Cache execution result"""
+    cache_key = get_cache_key(code, language, test_cases)
     _execution_cache[cache_key] = (result, time.time())
+    
     # Clean old cache entries
     current_time = time.time()
     expired_keys = [
-        k for k, (_, t) in _execution_cache.items()
+        k for k, (_, t) in _execution_cache.items() 
         if current_time - t > _execution_cache_timeout
     ]
     for k in expired_keys:
@@ -238,10 +380,12 @@ def get_batch_cache_key(code, language, test_cases, func_name=None):
     """Generate a specialized cache key for batch execution"""
     import hashlib
     # Use function signature for better cache hits across similar code
+    if func_name is None:
+        func_name = extract_function_name(code, language)
     code_hash = hashlib.md5(code.encode()).hexdigest()
     test_cases_str = json.dumps(test_cases, sort_keys=True)
     test_cases_hash = hashlib.md5(test_cases_str.encode()).hexdigest()
-    return f"batch:{language}:{code_hash}:{test_cases_hash}"
+    return f"batch:{language}:{func_name}:{code_hash}:{test_cases_hash}"
 
 def get_cached_batch_execution(code, language, test_cases, func_name=None):
     """Get cached batch execution result if available"""
@@ -269,160 +413,6 @@ def set_cached_batch_execution(code, language, test_cases, result, func_name=Non
     ]
     for k in expired_keys:
         del _batch_cache[k]
-
-# For Java, user_code must be ONLY the method(s), no class, no closing brace. The backend will wrap it.
-def run_all_tests_in_batch(user_code, language, driver_code, test_cases):
-    """
-    Dynamically generate driver code for all test cases using the driver_code as an initialization/call snippet.
-    For each test case, replace TEST_INPUT in driver_code with the test case input, call the function, and print the result.
-    Combine all into a main (or equivalent) function for batch execution.
-    """
-    def java_input_literal(val):
-        # Handles int[], double[], String[], int, double, String, etc.
-        if isinstance(val, str):
-            val = val.strip()
-            # Try to detect array
-            if val.startswith('[') and val.endswith(']'):
-                # Try to detect type: int, double, String
-                items = [x.strip() for x in val[1:-1].split(',') if x.strip()]
-                if all(i.replace('-', '').isdigit() for i in items):
-                    # int array
-                    return f"new int[]{{{','.join(items)}}}"
-                try:
-                    [float(x) for x in items]
-                    return f"new double[]{{{','.join(items)}}}"
-                except Exception:
-                    pass
-                # String array
-                if all((i.startswith('"') and i.endswith('"')) or (i.startswith("'") and i.endswith("'")) for i in items):
-                    return f"new String[]{{{','.join(items)}}}"
-                # Fallback: treat as int array
-                return f"new int[]{{{','.join(items)}}}"
-            # If it's a quoted string
-            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                return val
-            # Try to parse as int or float
-            try:
-                int(val)
-                return val
-            except Exception:
-                pass
-            try:
-                float(val)
-                return val
-            except Exception:
-                pass
-            # Fallback: treat as string
-            return f'"{val}"'
-        elif isinstance(val, (int, float)):
-            return str(val)
-        elif isinstance(val, list):
-            # Try to infer type
-            if all(isinstance(x, int) for x in val):
-                return f"new int[]{{{','.join(map(str, val))}}}"
-            elif all(isinstance(x, float) for x in val):
-                return f"new double[]{{{','.join(map(str, val))}}}"
-            elif all(isinstance(x, str) for x in val):
-                return f"new String[]{{{','.join(f'\"{x}\"' for x in val)}}}"
-            else:
-                return f"new Object[]{{{','.join(map(str, val))}}}"
-        else:
-            return str(val)
-    # Determine the function call/print pattern based on language
-    if language == 'cpp':
-        driver_lines = ["int main() {"]
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            snippet = driver_code.replace('TEST_INPUT', str(test_input))
-            driver_lines.append(f"    {snippet}")
-        driver_lines.append("    return 0;")
-        driver_lines.append("}")
-        generated_driver_code = '\n'.join(driver_lines)
-    elif language == 'python':
-        driver_lines = ["import ast", "if __name__ == '__main__':"]
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            # If input is a string, use ast.literal_eval; otherwise, use as is
-            if isinstance(test_input, str):
-                snippet = driver_code.replace('TEST_INPUT', f"ast.literal_eval({repr(test_input)})")
-            else:
-                snippet = driver_code.replace('TEST_INPUT', repr(test_input))
-            driver_lines.append(f"    print({snippet})")
-        generated_driver_code = '\n'.join(driver_lines)
-    elif language == 'java':
-        # Expect user_code to be only the method(s), no class, no closing brace
-        driver_lines = ["    public static void main(String[] args) {"]
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            java_input = java_input_literal(test_input)
-            snippet = driver_code.replace('TEST_INPUT', java_input)
-            driver_lines.append(f"        {snippet}")
-        driver_lines.append("    }")
-        generated_driver_code = '\n'.join(driver_lines)
-        # Always wrap user_code and main in Solution
-        full_code = (
-            f"{STANDARD_HEADERS['java']}\n"
-            f"public class Solution {{\n"
-            f"{user_code}\n"
-            f"{generated_driver_code}\n"
-            f"}}"
-        )
-    elif language == 'javascript':
-        # Build a single test harness that iterates over all test cases
-        driver_lines = ["const testCases = ["]
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            driver_lines.append(f"  {js_input_literal(test_input)},")
-        driver_lines.append("];")
-        driver_lines.append("for (const tc of testCases) {")
-        driver_lines.append(f"  {driver_code}")
-        driver_lines.append("}")
-        generated_driver_code = '\n'.join(driver_lines)
-    else:
-        return {
-            'success': False,
-            'error': f'Unsupported language: {language}',
-            'test_results': []
-        }
-    full_code = build_executable_code(user_code, language, generated_driver_code)
-    print("[DEBUG] Generated code to send to Piston:")
-    print(full_code)
-    lang_config = PISTON_LANGUAGES.get(language)
-    if not lang_config:
-        return {
-            'success': False,
-            'error': f'Unsupported language: {language}',
-            'test_results': []
-        }
-    data = {
-        'language': lang_config['lang'],
-        'version': lang_config['version'],
-        'files': [{
-            'name': lang_config['filename'],
-            'content': full_code
-        }]
-    }
- 
-    try:
-        response = requests.post(f"{PISTON_API}/execute", json=data, timeout=20)
-        if response.status_code != 200:
-            return {'success': False, 'error': f'API Error: {response.status_code}', 'test_results': []}
-        result = response.json()
-        if result.get('compile', {}).get('stderr'):
-            return {'success': False, 'error': result['compile']['stderr'], 'test_results': []}
-        if result.get('run', {}).get('stderr'):
-            return {'success': False, 'error': result['run']['stderr'], 'test_results': []}
-        output = result.get('run', {}).get('stdout', '').strip()
-        output_lines = output.split('\n') if output else []
-        test_results = []
-        for i, test_case in enumerate(test_cases):
-            expected = test_case.get('expected_output') or test_case.get('expected', '')
-            actual = output_lines[i].strip() if i < len(output_lines) else None
-            passed = (str(actual).strip() == str(expected).strip())
-            test_results.append({'test_number': i+1, 'passed': passed, 'actual': actual, 'expected': expected})
-        return {'success': True, 'test_results': test_results}
-    except Exception as e:
-        return {'success': False, 'error': str(e), 'test_results': []}
 
 # ================================
 # SERVE FRONTEND
@@ -689,10 +679,12 @@ def get_batch_cache_key(code, language, test_cases, func_name=None):
     """Generate a specialized cache key for batch execution"""
     import hashlib
     # Use function signature for better cache hits across similar code
+    if func_name is None:
+        func_name = extract_function_name(code, language)
     code_hash = hashlib.md5(code.encode()).hexdigest()
     test_cases_str = json.dumps(test_cases, sort_keys=True)
     test_cases_hash = hashlib.md5(test_cases_str.encode()).hexdigest()
-    return f"batch:{language}:{code_hash}:{test_cases_hash}"
+    return f"batch:{language}:{func_name}:{code_hash}:{test_cases_hash}"
 
 def get_cached_batch_execution(code, language, test_cases, func_name=None):
     """Get cached batch execution result if available"""
@@ -721,43 +713,6 @@ def set_cached_batch_execution(code, language, test_cases, result, func_name=Non
     for k in expired_keys:
         del _batch_cache[k]
 
-# ────────────── Input Conversion Helpers ──────────────
-def python_input_literal(val):
-    # For Python, use ast.literal_eval for all inputs
-    return f"ast.literal_eval({repr(val)})" if isinstance(val, str) else repr(val)
-
-def cpp_input_literal(val):
-    import ast
-    if isinstance(val, str) and val.strip().startswith('['):
-        py_val = ast.literal_eval(val)
-        def to_cpp(v):
-            if isinstance(v, list):
-                return '{' + ','.join(map(to_cpp, v)) + '}'
-            return str(v)
-        return to_cpp(py_val)
-    return str(val)
-
-def java_input_literal(val):
-    import ast
-    if isinstance(val, str) and val.strip().startswith('['):
-        py_val = ast.literal_eval(val)
-        def to_java(v):
-            if isinstance(v, list):
-                return '{' + ','.join(map(to_java, v)) + '}'
-            return str(v)
-        # 1D or 2D array
-        if isinstance(py_val[0], list):
-            return f"new int[][]{to_java(py_val)}"
-        else:
-            return f"new int[]{to_java(py_val)}"
-    return str(val)
-
-def js_input_literal(val):
-    # For JS, use JSON.parse for arrays/objects, as-is for numbers/strings
-    if isinstance(val, str) and (val.strip().startswith('[') or val.strip().startswith('{')):
-        return f"JSON.parse({json.dumps(val)})"
-    return json.dumps(val)
-
 @app.route('/api/execute', methods=['POST'])
 def execute_code():
     """Execute user code against visible test cases only"""
@@ -765,48 +720,68 @@ def execute_code():
         data = request.get_json()
         code = data.get('code')
         language = data.get('language')
-        test_cases = data.get('test_cases')
-        challenge_id = data.get('challenge_id')
-        difficulty = data.get('difficulty')
-        # --- Signature discovery and driver generation ---
-        try:
-            if language == 'python':
-                func_name, param_names = discover_python_signature(code)
-                input_literal = python_input_literal
-            elif language == 'cpp':
-                func_name, param_names = discover_cpp_signature(code)
-                input_literal = cpp_input_literal
-            elif language == 'java':
-                func_name, param_names = discover_java_signature(code)
-                input_literal = java_input_literal
-            elif language == 'javascript':
-                func_name, param_names = discover_js_signature(code)
-                input_literal = js_input_literal
-            else:
-                return jsonify({'success': False, 'error': f'Unsupported language: {language}'}), 400
-        except ValueError as e:
-            return jsonify({'success': False, 'error': str(e)}), 400
-        driver_snippet = build_driver_snippet(func_name, param_names, language)
-        # Build per-test driver code for batch execution
-        driver_lines = []
+        test_cases = data.get('test_cases', [])
+        
+        if not code or not language:
+            return jsonify({'success': False, 'error': 'Code and language required'}), 400
+        # --- Early syntax validation for Python/JS ---
         if language == 'python':
-            # Only pass the function call snippet, not the full main block
-            generated_driver_code = driver_snippet
-        elif language == 'cpp':
-            generated_driver_code = driver_snippet
-        elif language == 'java':
-            # Only pass the function call snippet, not the full main method
-            generated_driver_code = driver_snippet
+            import ast
+            try:
+                ast.parse(code)
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Python syntax error: {e}'}), 400
         elif language == 'javascript':
-            # Only pass the function call snippet, not the full test harness
-            generated_driver_code = driver_snippet
+            if 'function ' not in code:
+                return jsonify({'success': False, 'error': 'JavaScript code must define at least one function.'}), 400
+        # ... existing code ...
+        # Check cache first
+        cached_result = get_cached_execution(code, language, test_cases)
+        if cached_result:
+            return jsonify(cached_result)
+        # Check if language is supported
+        if language not in PISTON_LANGUAGES:
+            return jsonify({'success': False, 'error': 'Unsupported language'}), 400
+        config = PISTON_LANGUAGES[language]
+        # First check if code compiles
+        compilation = check_code_compilation(code, language, config)
+        if not compilation['success'] or not compilation['compiles']:
+            result = {
+                'success': False,
+                'error': 'Compilation failed',
+                'details': compilation['error']
+            }
+            set_cached_execution(code, language, test_cases, result)
+            return jsonify(result), 400
+        func_name = extract_function_name(code, language)
+        if not func_name:
+            result = {
+                'success': False,
+                'error': 'Could not identify main function'
+            }
+            set_cached_execution(code, language, test_cases, result)
+            return jsonify(result), 400
+        # Use batch execution for optimal performance
+        batch_result = run_all_tests_in_batch(code, language, test_cases, func_name)
+        # If batch execution failed, return error (do not fall back to sequential)
+        if not batch_result.get('success', False):
+            print(f"Batch execution failed: {batch_result.get('error', 'Unknown error')}")
+            return jsonify({
+                'success': False,
+                'error': batch_result.get('error', 'Batch execution failed'),
+                'test_results': [],
+                'tests_passed': 0,
+                'total_tests': len(test_cases)
+            }), 500
         else:
-            return jsonify({'success': False, 'error': f'Unsupported language: {language}'}), 400
-        # Now call run_all_tests_in_batch with the generated driver code
-        result = run_all_tests_in_batch(code, language, generated_driver_code, test_cases)
+            # Use batch execution results
+            result = batch_result
+        # Cache successful result
+        set_cached_execution(code, language, test_cases, result)
         return jsonify(result)
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'Network error: {str(e)}'}), 500
     except Exception as e:
-        print(f"[DEBUG] Exception in /api/execute: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/validate', methods=['POST'])
@@ -816,225 +791,247 @@ def validate_submission():
         data = request.get_json()
         code = data.get('code')
         language = data.get('language')
-        test_cases = data.get('test_cases')
         challenge_id = data.get('challenge_id')
         difficulty = data.get('difficulty')
-        # --- Fetch hidden test cases if challenge_id/difficulty provided ---
-        all_test_cases = test_cases or []
-        if challenge_id and difficulty:
-            challenge = get_challenge_by_id(language, difficulty, challenge_id)
-            if challenge:
-                visible = challenge.get('test_cases', [])
-                hidden = challenge.get('hidden_test_cases', [])
-                # If no test_cases provided, use all from DB
-                if not test_cases:
-                    all_test_cases = visible + hidden
-                # If test_cases provided, append hidden
+        username = data.get('username')  # Get username from request
+        
+        if not all([code, language, challenge_id, difficulty]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        # Get challenge details with test cases
+        challenge = get_challenge_by_id(language, difficulty, challenge_id)
+        if not challenge:
+            return jsonify({'success': False, 'error': 'Challenge not found'}), 404
+        
+        # Run validation against all test cases using batch execution
+        results = run_test_validation(code, language, challenge)
+        
+        # Check if all tests passed (including hidden tests)
+        visible_tests = challenge.get('test_cases', []) 
+        hidden_tests = []
+        for i in range(1, 3):  # Up to 2 hidden tests
+            input_key = f'hidden_test_{i}_input'
+            expected_key = f'hidden_test_{i}_expected'
+            if challenge.get(input_key) and challenge.get(expected_key):
+                hidden_tests.append({
+                    'input': challenge[input_key],
+                    'expected': challenge[expected_key],
+                    'number': len(visible_tests) + i
+                })
+        
+        # Run hidden tests in batch if all visible tests passed
+        if results['tests_passed'] == len(visible_tests):
+            if language not in PISTON_LANGUAGES:
+                return jsonify({
+                    'success': False,
+                    'error': f'Unsupported language: {language}',
+                    'visible_results': results,
+                    'all_passed': False
+                })
+            func_name = extract_function_name(code, language)
+            if not func_name:
+                return jsonify({
+                    'success': False,
+                    'error': 'Could not identify main function for hidden tests',
+                    'visible_results': results,
+                    'all_passed': False
+                })
+            # Prepare hidden test cases for batch execution
+            batch_hidden_tests = []
+            for test_case in hidden_tests:
+                test_input = test_case['input']
+                if isinstance(test_input, str):
+                    try:
+                        test_input = json.loads(test_input)
+                    except Exception:
+                        pass  # Keep as string if not valid JSON
+                batch_hidden_tests.append({
+                    'input': test_input,
+                    'expected': test_case.get('expected')
+                })
+            if batch_hidden_tests:
+                hidden_batch_result = run_all_tests_in_batch(code, language, batch_hidden_tests, func_name)
+                # If any hidden test fails, return failure
+                if not hidden_batch_result.get('success', False):
+                    return jsonify({
+                        'success': False,
+                        'error': hidden_batch_result.get('error', 'Hidden test cases failed'),
+                        'visible_results': results,
+                        'all_passed': False,
+                        'test_results': results.get('test_results', [])
+                    })
+                for hidden_result in hidden_batch_result.get('test_results', []):
+                    if not hidden_result.get('passed', False):
+                        return jsonify({
+                            'success': False,
+                            'error': 'Hidden test cases failed',
+                            'visible_results': results,
+                            'all_passed': False,
+                            'test_results': results.get('test_results', [])
+                        })
+            # All tests passed (visible and hidden) - Check if already completed
+            xp_reward = None
+            if username:
+                # Check if user has already completed this challenge
+                if is_challenge_completed(username, language, difficulty, challenge_id):
+                    # Challenge already completed - no XP reward
+                    return jsonify({
+                        'success': True,
+                        'message': '',  # Removed 'All test cases passed!'
+                        'visible_results': results,
+                        'all_passed': True,
+                        'score': results['score'],
+                        'xp_reward': None,
+                        'already_completed': True,
+                        'test_results': results.get('test_results', [])
+                    })
                 else:
-                    all_test_cases = test_cases + hidden
-        # --- Signature discovery and driver generation ---
-        try:
-            if language == 'python':
-                func_name, param_names = discover_python_signature(code)
-                input_literal = python_input_literal
-            elif language == 'cpp':
-                func_name, param_names = discover_cpp_signature(code)
-                input_literal = cpp_input_literal
-            elif language == 'java':
-                func_name, param_names = discover_java_signature(code)
-                input_literal = java_input_literal
-            elif language == 'javascript':
-                func_name, param_names = discover_js_signature(code)
-                input_literal = js_input_literal
-            else:
-                return jsonify({'success': False, 'error': f'Unsupported language: {language}'}), 400
-        except ValueError as e:
-            return jsonify({'success': False, 'error': str(e)}), 400
-        driver_snippet = build_driver_snippet(func_name, param_names, language)
-        # Build per-test driver code for batch execution
-        driver_lines = []
-        if language == 'python':
-            # Only pass the function call snippet, not the full main block
-            generated_driver_code = driver_snippet
-        elif language == 'cpp':
-            generated_driver_code = driver_snippet
-        elif language == 'java':
-            # Only pass the function call snippet, not the full main method
-            generated_driver_code = driver_snippet
-        elif language == 'javascript':
-            # Only pass the function call snippet, not the full test harness
-            generated_driver_code = driver_snippet
+                    # First time completing this challenge - Award XP
+                    score_to_award = results['score']
+                    xp_reward = update_user_score(username, score_to_award)
+                    from database_config import update_leaderboard_entry
+                    update_leaderboard_entry(username)
+            return jsonify({
+                'success': True,
+                'message': '',  # Removed 'All test cases passed!'
+                'visible_results': results,
+                'all_passed': True,
+                'score': results['score'],
+                'xp_reward': xp_reward,
+                'test_results': results.get('test_results', [])
+            })
         else:
-            return jsonify({'success': False, 'error': f'Unsupported language: {language}'}), 400
-        # Now call run_all_tests_in_batch with the generated driver code
-        result = run_all_tests_in_batch(code, language, generated_driver_code, all_test_cases)
-        # Patch: always return success, all_passed, test_results, error
-        response = {
-            "success": result.get("success", False),
-            "all_passed": all(r.get("passed") for r in result.get("test_results", [])) if "test_results" in result else False,
-            "test_results": result.get("test_results", []),
-        }
-        if "error" in result:
-            response["error"] = result["error"]
-        return jsonify(response)
+            # Not all visible tests passed
+            return jsonify({
+                'success': False,
+                'error': 'Not all visible test cases passed',
+                'visible_results': results,
+                'all_passed': False,
+                'test_results': results.get('test_results', [])
+            })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def check_code_compilation(user_code, language, driver_code, test_cases):
-    """
-    Check if code compiles and runs using the first test case only, without comparing output.
-    Uses the same dynamic driver code generation as batch execution.
-    """
-    if not test_cases:
-        return {
-            'success': False,
-            'compiles': False,
-            'error': 'No test cases available for compilation check.'
-        }
-    first_test_case = [test_cases[0]]
-    def java_input_literal(val):
-        if isinstance(val, str):
-            val = val.strip()
-            if val.startswith('[') and val.endswith(']'):
-                items = [x.strip() for x in val[1:-1].split(',') if x.strip()]
-                if all(i.replace('-', '').isdigit() for i in items):
-                    return f"new int[]{{{','.join(items)}}}"
-                try:
-                    [float(x) for x in items]
-                    return f"new double[]{{{','.join(items)}}}"
-                except Exception:
-                    pass
-                if all((i.startswith('"') and i.endswith('"')) or (i.startswith("'") and i.endswith("'")) for i in items):
-                    return f"new String[]{{{','.join(items)}}}"
-                return f"new int[]{{{','.join(items)}}}"
-            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                return val
-            try:
-                int(val)
-                return val
-            except Exception:
-                pass
-            try:
-                float(val)
-                return val
-            except Exception:
-                pass
-            return f'"{val}"'
-        elif isinstance(val, (int, float)):
-            return str(val)
-        elif isinstance(val, list):
-            if all(isinstance(x, int) for x in val):
-                return f"new int[]{{{','.join(map(str, val))}}}"
-            elif all(isinstance(x, float) for x in val):
-                return f"new double[]{{{','.join(map(str, val))}}}"
-            elif all(isinstance(x, str) for x in val):
-                return f"new String[]{{{','.join(f'\"{x}\"' for x in val)}}}"
-            else:
-                return f"new Object[]{{{','.join(map(str, val))}}}"
-        else:
-            return str(val)
-    # Use the same dynamic driver code generation as batch, but with only the first test case
-    if language == 'cpp':
-        driver_lines = ["int main() {"]
-        test_input = first_test_case[0].get('input')
-        snippet = driver_code.replace('TEST_INPUT', str(test_input))
-        driver_lines.append(f"    {snippet}")
-        driver_lines.append("    return 0;")
-        driver_lines.append("}")
-        generated_driver_code = '\n'.join(driver_lines)
-    elif language == 'python':
-        driver_lines = ["import ast", "if __name__ == '__main__':"]
-        test_input = first_test_case[0].get('input')
-        # If input is a string, use ast.literal_eval; otherwise, use as is
-        if isinstance(test_input, str):
-            snippet = driver_code.replace('TEST_INPUT', f"ast.literal_eval({repr(test_input)})")
-        else:
-            snippet = driver_code.replace('TEST_INPUT', repr(test_input))
-        driver_lines.append(f"    {snippet}")
-        generated_driver_code = '\n'.join(driver_lines)
-    elif language == 'java':
-        # Expect user_code to be only the method(s), no class, no closing brace
-        driver_lines = ["    public static void main(String[] args) {"]
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            java_input = java_input_literal(test_input)
-            snippet = driver_code.replace('TEST_INPUT', java_input)
-            driver_lines.append(f"        {snippet}")
-        driver_lines.append("    }")
-        generated_driver_code = '\n'.join(driver_lines)
-        # Always wrap user_code and main in Solution
-        full_code = (
-            f"{STANDARD_HEADERS['java']}\n"
-            f"public class Solution {{\n"
-            f"{user_code}\n"
-            f"{generated_driver_code}\n"
-            f"}}"
-        )
-    elif language == 'javascript':
-        driver_lines = []
-        for test_case in test_cases:
-            test_input = test_case.get('input')
-            # If input is a string, use JSON.parse; otherwise, use as is
-            if isinstance(test_input, str):
-                snippet = driver_code.replace('TEST_INPUT', f"JSON.parse({json.dumps(test_input)})")
-            else:
-                snippet = driver_code.replace('TEST_INPUT', json.dumps(test_input))
-            driver_lines.append(snippet)
-        generated_driver_code = '\n'.join(driver_lines)
-    else:
-        return {
-            'success': False,
-            'compiles': False,
-            'error': f'Unsupported language: {language}'
-        }
-    full_code = build_executable_code(user_code, language, generated_driver_code)
-    print(f"[DEBUG] Full code: {full_code}")
-    lang_config = PISTON_LANGUAGES.get(language)
-    if not lang_config:
-        return {
-            'success': False,
-            'compiles': False,
-            'error': f'Unsupported language: {language}'
-        }
-    data = {
-        'language': lang_config['lang'],
-        'version': lang_config['version'],
-        'files': [{
-            'name': lang_config['filename'],
-            'content': full_code
-        }]
-    }
+def check_code_compilation(code, language, config):
+    """Check if code compiles without running it"""
     try:
+        # Clean user code
+        clean_code = clean_user_code(code, language)
+        
+        # Get proper template from PISTON_LANGUAGES
+        lang_config = PISTON_LANGUAGES.get(language)
+        if not lang_config:
+            return {
+                'success': False,
+                'compiles': False,
+                'error': f'Unsupported language: {language}'
+            }
+        
+        # Extract the actual function name from user code
+        func_name = extract_function_name(code, language)
+        if not func_name:
+            return {
+                'success': False,
+                'compiles': False,
+                'error': 'Could not identify function to test'
+            }
+        
+        # For interpreted languages, we'll do a syntax check
+        if language == 'python':
+            # Use a dummy test_inputs for syntax check
+            test_inputs = json.dumps([None])
+            test_code = lang_config['template'].substitute(
+                user_code=clean_code,
+                test_inputs=test_inputs,
+                func_name=func_name
+            )
+        elif language == 'javascript':
+            converted_null = convert_input_format(None, language)
+            test_code = lang_config['template'].substitute(
+                user_code=clean_code,
+                test_input=converted_null,
+                func_name=func_name
+            )
+        else:
+            # For compiled languages (Java, C++), use proper null initialization
+            if language == 'java':
+                null_value = 'new int[0]'  # Empty array for Java
+            elif language == 'cpp':
+                null_value = '{1, 2, 3}'  # Safe default for C++ (not empty)
+            else:
+                null_value = 'null'
+            test_code = lang_config['template'].format(
+                user_code=clean_code,
+                test_input=null_value,
+                func_name=func_name
+            )
+        
+        # Validate filename to prevent double extension issues
+        filename = lang_config['filename']
+        
+        # Ensure filename doesn't have double extensions (fix for main.cpp.cpp issue)
+        if filename.count('.') > 1:
+            # Extract the base name and last extension
+            parts = filename.split('.')
+            if len(parts) >= 3:  # main.cpp.cpp -> parts = ['main', 'cpp', 'cpp']
+                filename = parts[0] + '.' + parts[-1]  # main.cpp
+            elif len(parts) == 2 and parts[0] == '':  # .cpp.cpp -> parts = ['', 'cpp', 'cpp']
+                filename = 'main.' + parts[-1]
+        
+        # Additional validation for common issues
+        if not filename or filename.startswith('.') or filename.endswith('.'):
+            # Fallback to language-specific default filenames
+            if language == 'cpp':
+                filename = 'main.cpp'
+            elif language == 'java':
+                filename = 'Main.java'
+            elif language == 'python':
+                filename = 'main.py'
+            elif language == 'javascript':
+                filename = 'main.js'
+            else:
+                filename = 'main.txt'
+        
+        # Execute the code
+        data = {
+            'language': lang_config['lang'],
+            'version': lang_config['version'],
+            'files': [{
+                'name': filename,
+                'content': test_code
+            }]
+        }
+        
         response = requests.post(
             f"{PISTON_API}/execute",
             json=data,
-            timeout=10
+            timeout=10  # Add timeout
         )
-        if response.status_code != 200:
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Check for compilation errors
+            if result.get('compile') and result['compile'].get('stderr'):
+                return {
+                    'success': True,
+                    'compiles': False,
+                    'error': result['compile']['stderr']
+                }
+            
+            # If we get here, it compiled successfully
+            return {
+                'success': True,
+                'compiles': True,
+                'message': 'Code compiles successfully'
+            }
+        else:
             return {
                 'success': False,
                 'compiles': False,
                 'error': f'Piston API error: {response.status_code}'
             }
-        result = response.json()
-        if result.get('compile', {}).get('stderr'):
-            return {
-                'success': True,
-                'compiles': False,
-                'error': result['compile']['stderr']
-            }
-        if result.get('run', {}).get('stderr'):
-            return {
-                'success': True,
-                'compiles': False,
-                'error': result['run']['stderr']
-            }
-        # If we get here, it compiled and ran successfully
-        return {
-            'success': True,
-            'compiles': True,
-            'message': 'Code compiles and runs successfully'
-        }
+            
     except Exception as e:
         return {
             'success': False,
@@ -1042,35 +1039,536 @@ def check_code_compilation(user_code, language, driver_code, test_cases):
             'error': f'Compilation check failed: {str(e)}'
         }
 
-def run_test_validation(user_code, language, challenge):
-    """Run all test cases for a submission using the new driver code system."""
-    # Get test cases from the challenge
+def extract_function_name(code, language):
+    """Extract the main function name from code"""
+    try:
+        patterns = {
+            'python': r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'javascript': r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'java': r'public\s+static\s+(?:int|void|boolean|String|long|double|float)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+            'cpp': r'(?:int|void|bool|long|double|float|string|char|auto|vector<[^>]+>)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*\{'
+        }
+        
+        if language not in patterns:
+            return None
+            
+        pattern = patterns[language]
+        matches = re.findall(pattern, code, re.MULTILINE)
+        
+        if matches:
+            # Return the first function found
+            func_name = matches[0]
+            return func_name
+        else:
+            return None
+            
+    except Exception as e:
+        print(f"Error extracting function name for {language}: {e}")
+        return None
+
+
+def run_test_validation(code, language, challenge):
+    """Run all test cases for a submission"""
+    lang_map = {
+        'python': {'lang': 'python', 'filename': 'main.py'},
+        'javascript': {'lang': 'javascript', 'filename': 'main.js'},
+        'java': {'lang': 'java', 'filename': 'Main.java'},
+        'cpp': {'lang': 'cpp', 'filename': 'main.cpp'}
+    }
+    if language not in lang_map:
+        raise ValueError('Unsupported language')
+    config = lang_map[language]
+    # First check if code compiles
+    compilation = check_code_compilation(code, language, config)
+    if not compilation['success'] or not compilation['compiles']:
+        return {
+            'success': False,
+            'error': 'Compilation failed',
+            'details': compilation['error'],
+            'tests_passed': 0,
+            'total_tests': len(challenge['test_cases']) if 'test_cases' in challenge else 0,
+            'score': 0
+        }
+    # Extract function name for test case setup
+    func_name = extract_function_name(code, language)
+    if not func_name:
+        return {
+            'success': False,
+            'error': 'Could not identify main function',
+            'tests_passed': 0,
+            'total_tests': len(challenge['test_cases']) if 'test_cases' in challenge else 0,
+            'score': 0
+        }
+    # Use batch execution for better performance
     test_cases = challenge.get('test_cases', [])
-    if not test_cases:
-        return {
-            'success': False,
-            'error': 'No test cases found for this challenge',
-            'test_results': []
-        }
-    driver_code = challenge.get('driver_code', '')
-    batch_result = run_all_tests_in_batch(user_code, language, driver_code, test_cases)
-    if batch_result.get('success', False):
-        test_results = batch_result.get('test_results', [])
-        tests_passed = sum(1 for r in test_results if r['passed'])
+    total_tests = len(test_cases)
+    if test_cases:
+        batch_result = run_all_tests_in_batch(code, language, test_cases, func_name)
+        if batch_result.get('success', False):
+            # Use batch execution results
+            test_results = batch_result.get('test_results', [])
+            tests_passed = batch_result.get('tests_passed', 0)
+        else:
+            # If batch execution fails, return error (do not fall back to sequential)
+            return {
+                'success': False,
+                'error': batch_result.get('error', 'Batch execution failed'),
+                'tests_passed': 0,
+                'total_tests': total_tests,
+                'score': 0,
+                'test_results': []
+            }
     else:
-        return {
-            'success': False,
-            'error': batch_result.get('error', 'Batch execution failed'),
-            'test_results': []
-        }
-    score = int((tests_passed / len(test_cases)) * challenge['max_score']) if test_cases and 'max_score' in challenge else 0
+        test_results = []
+        tests_passed = 0
+    # Calculate final score
+    score = int((tests_passed / total_tests) * challenge['max_score']) if total_tests and 'max_score' in challenge else 0
     return {
         'success': True,
         'tests_passed': tests_passed,
-        'total_tests': len(test_cases),
+        'total_tests': total_tests,
         'score': score,
         'test_results': test_results
     }
+
+def convert_input_format(test_input, language):
+    """Convert test input to language-specific format for template substitution"""
+    try:
+        if language == 'python':
+            return json.dumps(test_input)
+        elif language == 'javascript':
+            return json.dumps(test_input)
+            
+        elif language == 'java':
+            # Java: convert [1,2,3] to {1,2,3} for array initialization
+            if isinstance(test_input, list):
+                content = ', '.join(str(x) for x in test_input)
+                return '{' + content + '}'
+            else:
+                test_input_str = str(test_input)
+                return test_input_str.replace('[', '{').replace(']', '}')
+            
+        elif language == 'cpp':
+            # C++: Handle different input types with improved validation
+            if isinstance(test_input, list):
+                if not test_input:  # Empty array
+                    return '{1, 2, 3}'  # Default for empty arrays
+                content = ', '.join(str(x) for x in test_input)
+                return '{' + content + '}'
+            else:
+                test_input_str = str(test_input).strip()
+                
+                # Handle empty or null inputs - provide default vector
+                if not test_input_str or test_input_str in ['None', 'none', 'null']:
+                    return '{1, 2, 3}'  # Default test vector
+                
+                # If it's an array [1,2,3], convert to C++ vector {1,2,3}
+                if test_input_str.startswith('[') and test_input_str.endswith(']'):
+                    content = test_input_str[1:-1].strip()
+                    if content:  # Non-empty array
+                        return '{' + content + '}'
+                    else:  # Empty array []
+                        return '{1, 2, 3}'  # Default for empty arrays
+                
+                # If it's already in C++ format {1,2,3}, validate and clean
+                if test_input_str.startswith('{') and test_input_str.endswith('}'):
+                    content = test_input_str[1:-1].strip()
+                    if content and content != '{}':  # Valid non-empty content
+                        return test_input_str
+                    else:  # Empty or malformed content
+                        return '{1, 2, 3}'  # Default for empty/malformed
+                
+                # Single number or other value
+                return test_input_str
+            
+        return str(test_input)
+        
+    except Exception as e:
+        print(f"Error converting input format: {e}")
+        return str(test_input)
+
+def run_all_tests_in_batch(code, language, test_cases, func_name):
+    """
+    Execute all test cases in a single API call for maximum performance
+    This is the main optimization that reduces execution time by 90%+
+    """
+    try:
+        if not test_cases:
+            return {
+                'success': True,
+                'tests_passed': 0,
+                'total_tests': 0,
+                'test_results': []
+            }
+        # Check batch cache first
+        cached_result = get_cached_batch_execution(code, language, test_cases, func_name)
+        if cached_result:
+            return cached_result
+        # Get language configuration
+        lang_config = PISTON_LANGUAGES.get(language)
+        if not lang_config:
+            return {
+                'success': False,
+                'error': f'Unsupported language: {language}',
+                'tests_passed': 0,
+                'total_tests': len(test_cases),
+                'test_results': []
+            }
+         # Clean user code
+        clean_code = clean_user_code(code, language)
+        
+        # Create batch test code based on language
+        if language == 'python':
+            batch_code = f"""
+import sys
+import json
+
+{clean_code}
+
+test_inputs = []
+for line in sys.stdin:
+    line = line.strip()
+    if line:
+        test_inputs.append(json.loads(line))
+for raw in test_inputs:
+    try:
+        # support __args__ (list), __kwargs__ (dict), list, single
+        if isinstance(raw, dict) and "__args__" in raw:
+            result = {func_name}(*raw["__args__"])
+        elif isinstance(raw, dict) and "__kwargs__" in raw:
+            result = {func_name}(**raw["__kwargs__"])
+        elif isinstance(raw, list):
+            try: result = {func_name}(*raw)
+            except TypeError: result = {func_name}(raw)
+        else:
+            result = {func_name}(raw)
+        # void: echo args back
+        if isinstance(raw, dict) and raw.get("__void__"):
+            obj = raw.get("__args__", raw)
+        else:
+            obj = result
+        print(json.dumps(obj, default=str))
+    except Exception as e:
+        print("ERROR: " + str(e))
+"""
+        
+        elif language == 'javascript':
+            batch_code = f"""
+{clean_code}
+
+const rl = require('readline')
+  .createInterface({{ input: process.stdin, output: process.stdout }});
+const lines = [];
+rl.on('line', l => lines.push(l));
+rl.on('close', async () => {{
+  for (const raw of lines) {{
+    try {{
+      const t = JSON.parse(raw);
+      let result;
+      if (t && t.__args__) {{
+        result = await {func_name}(...t.__args__);
+      }} else if (t && t.__kwargs__) {{
+        result = await {func_name}(t.__kwargs__);
+      }} else if (Array.isArray(t)) {{
+        result = await {func_name}(t);
+      }} else {{
+        result = await {func_name}(t);
+      }}
+
+      const out = (t && t.__void__)
+        ? JSON.stringify(t.__args__ || t)
+        : JSON.stringify(result);
+      console.log(out);
+    }} catch (e) {{
+      console.log("ERROR: " + e.message);
+    }}
+  }}
+}});
+"""
+        elif language == 'java':
+            batch_code = """
+import java.io.*;
+import java.util.*;
+import java.util.stream.*;
+
+public class Main {{
+    // === User's method ===
+{user_code}
+    // =====================
+
+    public static void main(String[] args) throws Exception {{
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line;
+        while ((line = br.readLine()) != null) {{
+            line = line.trim();
+            if (line.isEmpty()) continue;
+
+            // Simple JSON-array parser: "[1,2,3]" → int[]{{1,2,3}}
+            String inside = line.substring(1, line.length() - 1).trim();
+            int[] nums;
+            if (inside.isEmpty()) {{
+                nums = new int[0];
+            }} else {{
+                nums = Arrays.stream(inside.split(","))
+                             .map(String::trim)
+                             .mapToInt(Integer::parseInt)
+                             .toArray();
+            }}
+
+            // Call the user function
+            int result = {func_name}(nums);
+
+            // Print the result
+            System.out.println(result);
+        }}
+    }}
+}}
+""".format(user_code=clean_code, func_name=func_name)
+        elif language == 'cpp':
+            batch_code = f"""
+#include <iostream>
+#include <vector>
+#include <sstream>
+#include <string>
+#include <algorithm>
+using namespace std;
+{clean_code}
+int main() {{
+    string line;
+    while (getline(cin, line)) {{
+        if (line.empty()) continue;
+        try {{
+            line.erase(remove(line.begin(), line.end(), '['), line.end());
+            line.erase(remove(line.begin(), line.end(), ']'), line.end());
+            line.erase(remove(line.begin(), line.end(), ' '), line.end());
+            vector<int> testInput;
+            stringstream ss(line);
+            string num;
+            while (getline(ss, num, ',')) {{
+                if (!num.empty()) {{
+                    testInput.push_back(stoi(num));
+                }}
+            }}
+            auto result = {func_name}(testInput);
+            cout << result << endl;
+        }} catch (const exception& e) {{
+            cout << "ERROR: " << e.what() << endl;
+        }}
+    }}
+    return 0;
+}}
+"""
+        else:
+            return {
+                'success': False,
+                'error': f'Batch execution not implemented for {language}',
+                'tests_passed': 0,
+                'total_tests': len(test_cases),
+                'test_results': []
+            }
+        input_lines = []
+        for test_case in test_cases:
+            test_input = test_case.get('input', [])
+            if isinstance(test_input, str):
+                try:
+                    test_input = json.loads(test_input)
+                except:
+                    pass
+            if language in ['python', 'javascript']:
+                input_lines.append(json.dumps(test_input))
+            else:
+                input_lines.append(str(test_input))
+        stdin_data = '\n'.join(input_lines)
+        piston_request = {
+            'language': lang_config['lang'],
+            'version': lang_config['version'],
+            'files': [
+                {
+                    'name': lang_config['filename'],
+                    'content': batch_code
+                }
+            ],
+            'stdin': stdin_data,
+            'compile_timeout': 8000,
+            'run_timeout': 10000,
+            'compile_memory_limit': -1,
+            'run_memory_limit': -1
+        }
+        response = requests.post(
+            f'{PISTON_API}/execute',
+            headers={'Content-Type': 'application/json'},
+            json=piston_request,
+            timeout=20
+        )
+        if response.status_code != 200:
+            return {
+                'success': False,
+                'error': f'API Error: {response.status_code}',
+                'tests_passed': 0,
+                'total_tests': len(test_cases),
+                'test_results': []
+            }
+        result = response.json()
+        if result.get('compile', {}).get('stderr'):
+            return {
+                'success': False,
+                'error': f'Compilation error: {result["compile"]["stderr"]}',
+                'tests_passed': 0,
+                'total_tests': len(test_cases),
+                'test_results': []
+            }
+        if result.get('run', {}).get('stderr'):
+            return {
+                'success': False,
+                'error': f'Runtime error: {result["run"]["stderr"]}',
+                'tests_passed': 0,
+                'total_tests': len(test_cases),
+                'test_results': []
+            }
+        output = result.get('run', {}).get('stdout', '').strip()
+        output_lines = output.split('\n') if output else []
+        test_results = []
+        tests_passed = 0
+        for i, test_case in enumerate(test_cases):
+            expected = test_case.get('expected_output') or test_case.get('expected', '')
+            if i < len(output_lines):
+                actual = output_lines[i].strip()
+                if actual.startswith('ERROR:'):
+                    test_results.append({
+                        'test_number': i + 1,
+                        'passed': False,
+                        'error': actual,
+                        'output': None,
+                        'expected': expected
+                    })
+                else:
+                    try:
+                        parsed_actual = json.loads(actual)
+                    except (json.JSONDecodeError, ValueError):
+                        actual_lower = actual.lower().strip()
+                        if actual_lower == 'none':
+                            parsed_actual = None
+                        elif actual_lower == 'null':
+                            parsed_actual = None
+                        else:
+                            parsed_actual = actual
+                    passed = compare_outputs_smart(parsed_actual, expected)
+                    if passed:
+                        tests_passed += 1
+                    test_results.append({
+                        'test_number': i + 1,
+                        'passed': passed,
+                        'error': None,
+                        'output': parsed_actual,
+                        'expected': expected
+                    })
+            else:
+                test_results.append({
+                    'test_number': i + 1,
+                    'passed': False,
+                    'error': 'No output received',
+                    'output': None,
+                    'expected': expected
+                })
+        result = {
+            'success': True,
+            'tests_passed': tests_passed,
+            'total_tests': len(test_cases),
+            'test_results': test_results
+        }
+        set_cached_batch_execution(code, language, test_cases, result, func_name)
+        return result
+    except requests.RequestException as e:
+        return {
+            'success': False,
+            'error': f'Network error: {str(e)}',
+            'tests_passed': 0,
+            'total_tests': len(test_cases),
+            'test_results': []
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Batch execution failed: {str(e)}',
+            'tests_passed': 0,
+            'total_tests': len(test_cases),
+            'test_results': []
+        }
+
+def clean_user_code(code, language):
+    """Remove main function and test-related code from user code while preserving imports"""
+    if language == 'python':
+        # Split into lines and filter out test-related code, but preserve imports
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Skip test-related lines but preserve imports and function definitions
+            if not any(x in line_lower for x in ['test_input', 'print(result)', 'print(', '#test']):
+                # Allow import statements and function definitions
+                if (line_lower.startswith('import ') or 
+                    line_lower.startswith('from ') or 
+                    line_lower.startswith('def ') or 
+                    line.strip() == '' or
+                    not line_lower.startswith('print(') and 'test_input' not in line_lower):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
+    elif language == 'javascript':
+        # Remove test-related code but preserve utility functions and imports
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Skip test-related lines but preserve function definitions and utility code
+            if not any(x in line_lower for x in ['test_input', 'console.log(result)', '//test']):
+                # Allow const, function definitions, and other non-test code
+                if (line_lower.startswith('const ') or 
+                    line_lower.startswith('function ') or 
+                    line_lower.startswith('let ') or 
+                    line_lower.startswith('var ') or
+                    line.strip() == '' or
+                    'test_input' not in line_lower and 'console.log(' not in line_lower):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
+    elif language == 'java':
+        # Remove main method and test code but preserve imports and class structure
+        # First remove main method
+        code = re.sub(r'public\s+static\s+void\s+main\s*\([^)]*\)\s*\{[^}]*\}', '', code, flags=re.DOTALL)
+        # Remove test-related lines but preserve imports
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if not any(x in line_lower for x in ['test_input', 'system.out.println(result)', '//test']):
+                # Allow imports, class definitions, and method definitions
+                if (line_lower.startswith('import ') or 
+                    line_lower.startswith('public class') or 
+                    line_lower.startswith('public static') or 
+                    line_lower.startswith('private') or
+                    line.strip() == '' or
+                    'test_input' not in line_lower):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
+    elif language == 'cpp':
+        # Remove main function and test code but preserve includes and function definitions
+        # First remove main function
+        code = re.sub(r'int\s+main\s*\([^)]*\)\s*\{[^}]*\}', '', code, flags=re.DOTALL)
+        # Remove test-related lines but preserve includes and typedefs
+        lines = code.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if not any(x in line_lower for x in ['test_input', 'cout << result', '//test']):
+                # Allow includes, using statements, typedefs, defines, and function definitions
+                if (line_lower.startswith('#include') or 
+                    line_lower.startswith('using ') or 
+                    line_lower.startswith('typedef') or 
+                    line_lower.startswith('#define') or 
+                    line.strip() == '' or
+                    ('test_input' not in line_lower and 'cout <<' not in line_lower)):
+                    clean_lines.append(line)
+        return '\n'.join(clean_lines)
+    return code
 
 def compare_outputs_smart(actual, expected):
     """Smart comparison that handles different data types properly"""
@@ -1292,7 +1790,7 @@ def add_challenge():
         data = request.get_json()
         print("[DEBUG] Received challenge data:", data)
         # Validate required fields
-        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'reference_solution', 'solution_explanation', 'hints', 'test_cases', 'hidden_test_cases', 'driver_code']
+        required_fields = ['language', 'difficulty', 'title', 'description', 'buggy_code', 'reference_solution', 'solution_explanation', 'hints', 'test_cases', 'hidden_test_cases']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
         if missing_fields:
             print(f"[DEBUG] Missing fields: {missing_fields}")
@@ -1506,76 +2004,6 @@ def get_all_available_challenges():
             except Exception:
                 continue
     return all_challenges
-
-# ────────────── Signature Discovery Helpers ──────────────
-import ast
-import re
-
-def discover_python_signature(user_code: str):
-    tree = ast.parse(user_code)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
-            params = [arg.arg for arg in node.args.args]
-            return node.name, params
-    raise ValueError("No top-level function definition found in Python code.")
-
-_cpp_signature_regex = re.compile(
-    r'^\s*([A-Za-z_]\w*)\s+'   # return type
-    r'([A-Za-z_]\w*)\s*'       # function name
-    r'\(\s*([^)]*)\)',         # param list
-    re.MULTILINE
-)
-def discover_cpp_signature(user_code: str):
-    m = _cpp_signature_regex.search(user_code)
-    if not m:
-        raise ValueError("No free function signature found in C++ code.")
-    _, name, params = m.groups()
-    param_names = [p.strip().split()[-1] for p in params.split(',') if p.strip()]
-    return name, param_names
-
-_java_signature_regex = re.compile(
-    r'public\s+static\s+\w+\s+([A-Za-z_]\w*)\s*\(([^)]*)\)'
-)
-def discover_java_signature(user_code: str):
-    m = _java_signature_regex.search(user_code)
-    if not m:
-        raise ValueError("No static method signature found in Java code.")
-    name, params = m.groups()
-    param_names = [p.strip().split()[-1] for p in params.split(',') if p.strip()]
-    return name, param_names
-
-_js_signature_regex = re.compile(
-    r'function\s+([A-Za-z_]\w*)\s*\(([^)]*)\)'
-)
-def discover_js_signature(user_code: str):
-    m = _js_signature_regex.search(user_code)
-    if not m:
-        raise ValueError("No function signature found in JavaScript code.")
-    name, params = m.groups()
-    param_names = [p.strip() for p in params.split(',') if p.strip()]
-    return name, param_names
-
-# ────────────── Driver Builder ──────────────
-def build_driver_snippet(func_name, param_names, language):
-    if language == 'javascript':
-        if len(param_names) == 1:
-            # Single parameter: pass tc directly
-            return f"console.log({func_name}(tc));"
-        else:
-            args = ", ".join(f"tc[{i}]" for i in range(len(param_names)))
-            return f"console.log({func_name}({args}));"
-    elif language == 'java':
-        # Use TEST_INPUT placeholder for Java, to be replaced in run_all_tests_in_batch
-        return f"System.out.println({func_name}(TEST_INPUT));"
-    elif language == 'python':
-        # Use TEST_INPUT placeholder for Python, to be replaced in run_all_tests_in_batch
-        return f"{func_name}(TEST_INPUT)"
-    elif language == 'cpp':
-        # Use TEST_INPUT placeholder for C++, to be replaced in run_all_tests_in_batch
-        return f"cout << {func_name}(TEST_INPUT) << endl;"
-    else:
-        args = ", ".join(f"tc[{i}]" for i in range(len(param_names)))
-        return f"{func_name}({args})"
 
 if __name__ == '__main__':
     print("🔌 Testing database connection...")

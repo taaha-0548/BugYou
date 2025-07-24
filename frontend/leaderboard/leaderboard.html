@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BugYou - Leaderboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/leaderboard/leaderboard.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-section">
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <h1 class="logo-text">BugYou Leaderboard</h1>
+      </div>
+      
+      <!-- Navigation -->
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/main_page" class="nav-link">Start Debugging</a>
+        <a href="/about" class="nav-link">About</a>
+        <a href="/guide" class="nav-link">Guide</a>
+        <div class="user-section" id="userSection" style="display: none;">
+          <span class="username" id="currentUsername"></span>
+          <a href="/user_profile" class="profile-link">Profile</a>
+          <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Filter Section -->
+      <div class="filter-section">
+        <h2 class="filter-title">Leaderboard Filters</h2>
+        <div class="filter-buttons">
+          <button class="filter-btn active" data-filter="overall" data-value="">
+            Overall
+          </button>
+          <button class="filter-btn" data-filter="language" data-value="python">
+            Python
+          </button>
+          <button class="filter-btn" data-filter="language" data-value="cpp">
+            C++
+          </button>
+          <button class="filter-btn" data-filter="language" data-value="java">
+            Java
+          </button>
+          <button class="filter-btn" data-filter="language" data-value="javascript">
+            JavaScript
+          </button>
+          <button class="filter-btn" data-filter="difficulty" data-value="basic">
+            Basic
+          </button>
+          <button class="filter-btn" data-filter="difficulty" data-value="intermediate">
+            Intermediate
+          </button>
+          <button class="filter-btn" data-filter="difficulty" data-value="advanced">
+            Advanced
+          </button>
+          <button class="filter-btn" data-filter="streak" data-value="">
+            Streak
+          </button>
+        </div>
+      </div>
+
+      <!-- User Position Card (if logged in) -->
+      <div class="user-position-card" id="userPositionCard" style="display: none;">
+        <h3 class="position-title">Your Position</h3>
+        <div class="position-info">
+          <div class="position-rank" id="userRank">#--</div>
+          <div class="position-stats">
+            <div class="stat-item">
+              <span class="stat-label">Score:</span>
+              <span class="stat-value" id="userScore">--</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Solved:</span>
+              <span class="stat-value" id="userSolved">--</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Level:</span>
+              <span class="stat-value" id="userLevel">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Table -->
+      <div class="leaderboard-section">
+        <h2 class="leaderboard-title">Top Performers</h2>
+        <div class="leaderboard-container">
+          <div class="leaderboard-header">
+            <div class="header-rank">Rank</div>
+            <div class="header-user">User</div>
+            <div class="header-score">Score</div>
+            <div class="header-solved">Solved</div>
+            <div class="header-level">Level</div>
+            <div class="header-best">Best</div>
+            <div class="header-streak">Streak</div>
+          </div>
+          <div class="leaderboard-body" id="leaderboardBody">
+            <!-- Leaderboard entries will be loaded here -->
+            <div class="loading">
+              Loading leaderboard...
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/leaderboard/leaderboard.js"></script>
+</body>
+</html> 

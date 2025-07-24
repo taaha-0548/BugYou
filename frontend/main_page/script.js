@@ -10,6 +10,7 @@ let currentChallengeId = 1;
 let currentChallenge = null;
 let startTime = Date.now();
 let timerInterval;
+let timerCallCount = 0;
 let attempts = 0;
 let score = 10;
 let hintsUsed = 0;
@@ -20,18 +21,29 @@ let currentTestCase = 0;
 let testCases = [];
 let testResults = [];
 
+// Optimization: Cache visible test results to avoid re-running
+let lastRunCode = '';
+let lastRunResults = [];
+let lastRunAllPassed = false;
+
+// Helper function to clear cached test results
+function clearCachedTestResults() {
+    lastRunCode = '';
+    lastRunResults = [];
+    lastRunAllPassed = false;
+}
+
 // --- HINTS FEATURE STATE ---
 let challengeHints = []; // Array of hints for the current challenge
 let revealedHints = [];  // Indices of revealed hints (reset on new challenge)
 
-// Cache for API responses
+// Enhanced cache for API responses
 const apiCache = new Map();
-const API_CACHE_DURATION = 5000; // 5 seconds
+const API_CACHE_DURATION = 10000; // 10 seconds (increased for better performance)
 
-// Add cache busting parameter to API calls
+// Clean API URLs - no cache busting for better backend caching
 function getApiUrl(endpoint) {
-    const timestamp = new Date().getTime();
-    return `${API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}_=${timestamp}`;
+    return `${API_BASE}${endpoint}`;
 }
 
 // Optimized API call function with caching
@@ -78,12 +90,53 @@ function debounce(func, wait) {
 
 // Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', async function() {
+    // Ensure loading indicator is hidden
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+    
     // Initialize UI components first
     initEditor();
-    initTimer();
     initTestCaseNavigation();
     initEventListeners();
     initUIHandlers();
+    
+
+    
+    // Add logo click handler
+    const homeLogo = document.getElementById('homeLogo');
+    if (homeLogo) {
+        homeLogo.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+    }
+    
+    // Add user profile click handler
+    const userInfo = document.getElementById('userInfo');
+    if (userInfo) {
+        userInfo.addEventListener('click', () => {
+            window.location.href = '/user_profile';
+        });
+    }
+    
+    // Set current username and show leaderboard button if logged in
+    const currentUsername = document.getElementById('currentUsername');
+    const leaderboardBtn = document.getElementById('leaderboardBtn');
+    if (currentUsername) {
+        const username = localStorage.getItem('currentUser') || localStorage.getItem('username') || 'User';
+        currentUsername.textContent = username;
+        
+        // Show leaderboard button if user is logged in
+        if (username !== 'User' && leaderboardBtn) {
+            leaderboardBtn.style.display = 'inline-flex';
+        }
+        
+        // Load user XP and level if logged in
+        if (username !== 'User') {
+            loadUserXP(username);
+        }
+    }
     
     // Apply default theme
     applyTheme('basic');
@@ -95,6 +148,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     } catch (error) {
         console.error('Failed to initialize:', error);
         showResultsNotification('Initialization Error', 'Failed to load initial challenge. Please refresh the page.', 'error');
+    } finally {
+        // Ensure loading indicator is hidden after initialization
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
     }
 
     // Add Challenge Form Functionality
@@ -152,22 +211,64 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Language template code
     const codeTemplates = {
-        python: `def function_name(parameter):
+        python: `import sys
+import math
+import collections
+from collections import defaultdict, deque, Counter
+import heapq
+import bisect
+import itertools
+import functools
+from functools import lru_cache
+import re
+import string
+
+def function_name(parameter):
     # Bug: Add your buggy code here
     pass`,
-        javascript: `function functionName(parameter) {
+        javascript: `// Common utility functions
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+const lcm = (a, b) => (a * b) / gcd(a, b);
+const isPrime = (n) => { if (n < 2) return false; for (let i = 2; i <= Math.sqrt(n); i++) if (n % i === 0) return false; return true; };
+const factorial = (n) => n <= 1 ? 1 : n * factorial(n - 1);
+
+function functionName(parameter) {
     // Bug: Add your buggy code here
     return null;
 }`,
-        java: `public class ClassName {
+        java: `import java.util.*;
+import java.util.stream.*;
+import java.io.*;
+import java.math.*;
+import java.text.*;
+import java.lang.*;
+
+public class ClassName {
     public static int functionName(int[] parameter) {
         // Bug: Add your buggy code here
         return 0;
     }
 }`,
-        cpp: `#include <iostream>
-#include <vector>
+        cpp: `#include <bits/stdc++.h>
 using namespace std;
+
+// Common typedefs for competitive programming
+typedef long long ll;
+typedef unsigned long long ull;
+typedef pair<int, int> pii;
+typedef pair<ll, ll> pll;
+typedef vector<int> vi;
+typedef vector<ll> vll;
+typedef vector<pii> vpii;
+typedef vector<string> vs;
+
+// Common macros
+#define all(x) (x).begin(), (x).end()
+#define sz(x) (int)(x).size()
+#define pb push_back
+#define mp make_pair
+#define fi first
+#define se second
 
 int functionName(vector<int> parameter) {
     // Bug: Add your buggy code here
@@ -307,20 +408,153 @@ function initEditor() {
     });
 
     editor.setValue('// Loading challenge from database...');
+    
+    // Clear cached test results when code changes (debounced to avoid excessive calls)
+    const debouncedClearCache = debounce(() => {
+        clearCachedTestResults();
+    }, 1000); // Clear cache 1 second after user stops typing
+    
+    editor.on('change', debouncedClearCache);
+    
+    // Initialize font size controls
+    initFontSizeControls();
+}
+
+// Font size control functionality
+function initFontSizeControls() {
+    const decreaseBtn = document.getElementById('decreaseFontSize');
+    const increaseBtn = document.getElementById('increaseFontSize');
+    const fontSizeDisplay = document.getElementById('fontSizeDisplay');
+    
+    if (!decreaseBtn || !increaseBtn || !fontSizeDisplay) return;
+    
+    // Get saved zoom level or use default
+    let currentZoom = parseInt(localStorage.getItem('codeEditorZoom')) || 100;
+    const minZoom = 100;
+    const maxZoom = 200;
+    const step = 10;
+    
+    // Update display and apply zoom
+    function updateZoom() {
+        fontSizeDisplay.textContent = `${currentZoom}%`;
+        
+        // Apply zoom to the CodeMirror wrapper
+        const editorWrapper = editor.getWrapperElement();
+        editorWrapper.style.transform = `scale(${currentZoom / 100})`;
+        editorWrapper.style.transformOrigin = 'top left';
+        
+        // Ensure the editor container handles overflow properly
+        const editorContainer = document.querySelector('.editor-container');
+        editorContainer.style.overflow = 'auto';
+        editorContainer.style.position = 'relative';
+        
+        localStorage.setItem('codeEditorZoom', currentZoom.toString());
+        
+        // Update button states
+        decreaseBtn.disabled = currentZoom <= minZoom;
+        increaseBtn.disabled = currentZoom >= maxZoom;
+        
+        // Refresh CodeMirror to update layout
+        editor.refresh();
+    }
+    
+    // Decrease zoom
+    decreaseBtn.addEventListener('click', () => {
+        if (currentZoom > minZoom) {
+            currentZoom -= step;
+            updateZoom();
+        }
+    });
+    
+    // Increase zoom
+    increaseBtn.addEventListener('click', () => {
+        if (currentZoom < maxZoom) {
+            currentZoom += step;
+            updateZoom();
+        }
+    });
+    
+    // Add mouse wheel zoom functionality
+    const editorElement = editor.getWrapperElement();
+    editorElement.addEventListener('wheel', (e) => {
+        // Check if Ctrl key is pressed
+        if (e.ctrlKey) {
+            e.preventDefault(); // Prevent default browser zoom
+            
+            if (e.deltaY < 0) {
+                // Wheel up - zoom in
+                if (currentZoom < maxZoom) {
+                    currentZoom += step;
+                    updateZoom();
+                }
+            } else {
+                // Wheel down - zoom out
+                if (currentZoom > minZoom) {
+                    currentZoom -= step;
+                    updateZoom();
+                }
+            }
+        }
+    });
+    
+    // Initialize with saved or default zoom
+    updateZoom();
 }
 
 // Initialize count-up timer
 function initTimer() {
+    // Clear any existing timer first
+    if (timerInterval) {
+        console.log(`🔄 Clearing existing timer interval: ${timerInterval}`);
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    
     startTime = Date.now();
+    console.log(`⏱️ Timer initialized at: ${new Date(startTime).toLocaleTimeString()}`);
+    
     timerInterval = setInterval(() => {
+        timerCallCount++;
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
         const seconds = elapsed % 60;
         const timerElement = document.getElementById('timer');
         if (timerElement) {
             timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            console.log(`⚠️ Timer element not found`);
+        }
+        
+        // Log every 10 seconds to track timer activity
+        if (timerCallCount % 10 === 0) {
+            console.log(`⏱️ Timer tick #${timerCallCount} - Current time: ${minutes}:${seconds.toString().padStart(2, '0')}`);
         }
     }, 1000);
+    
+    console.log(`✅ Timer interval created: ${timerInterval}`);
+}
+
+function stopTimer() {
+    console.log(`🛑 Attempting to stop timer...`);
+    console.log(`   Timer interval exists: ${timerInterval ? 'Yes' : 'No'}`);
+    
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        console.log(`✅ Timer stopped successfully`);
+        
+        // Update timer display to show final time
+        const timerElement = document.getElementById('timer');
+        if (timerElement) {
+            const finalTime = getElapsedTime();
+            const minutes = Math.floor(finalTime / 60);
+            const seconds = finalTime % 60;
+            timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            console.log(`⏱️ Timer display updated to: ${timerElement.textContent}`);
+        }
+    } else {
+        console.log(`⚠️ No timer interval to stop`);
+    }
 }
 
 // Initialize test case navigation functionality
@@ -349,13 +583,21 @@ function initTestCaseNavigation() {
 function updateActiveTestCaseButton() {
     const testCaseButtons = document.querySelectorAll('.test-case-btn');
     testCaseButtons.forEach((btn, index) => {
-        btn.classList.remove('active', 'passed', 'failed', 'pending');
+        // Clear all status classes
+        btn.classList.remove('active', 'passed', 'failed');
+        
+        // Only add result status if test is completed (not running)
+        if (testResults[index] && testResults[index].status !== 'running') {
+            if (testResults[index].passed) {
+                btn.classList.add('passed');
+            } else {
+                btn.classList.add('failed');
+            }
+        }
+        
+        // Add active class on top of status class
         if (index === currentTestCase) {
             btn.classList.add('active');
-        }
-        // Add result status if available
-        if (testResults[index]) {
-            btn.classList.add(testResults[index].passed ? 'passed' : 'failed');
         }
     });
 
@@ -401,34 +643,38 @@ function showTestCase(index, context = 'main') {
         const expectedOutput = testCase.expected_output || testCase.expected;
         testExpectedDisplay.innerHTML = `<pre>${expectedOutput}</pre>`;
         
-        // Display actual output if test has been run
-        if (testResults && testResults[index]) {
+        // Display actual output if test has been run and completed
+        if (testResults && testResults[index] && testResults[index].status !== 'running') {
             actualOutputSection.style.display = 'block';
-            const actualOutput = testResults[index].output !== undefined ? testResults[index].output : 'No output';
+            let actualOutput = testResults[index].actual !== undefined ? testResults[index].actual : 'No output';
+            // Only for Actual Output: pretty-print arrays/objects
+            try {
+                if (typeof actualOutput === 'string' && (actualOutput.trim().startsWith('[') || actualOutput.trim().startsWith('{'))) {
+                    actualOutput = JSON.stringify(JSON.parse(actualOutput));
+                } else if (typeof actualOutput === 'object') {
+                    actualOutput = JSON.stringify(actualOutput);
+                }
+            } catch (e) {
+                // If parsing fails, leave as-is
+            }
             testActualDisplay.innerHTML = `<pre>${actualOutput}</pre>`;
             
-            // Update result badge with detailed feedback
+            // Update result badge with simple status
             if (testResults[index].passed) {
-                testResultBadge.innerHTML = '<i class="fas fa-check"></i> Test Case ' + (index + 1) + ' Passed';
-                testResultBadge.className = 'badge success';
+                testResultBadge.innerHTML = 'passed';
+                testResultBadge.className = 'test-result-badge passed';
             } else {
-                const isHidden = testCase.hidden;
-                const failMessage = isHidden ? 
-                    'Hidden Test Case ' + (index + 1) + ' Failed' :
-                    'Test Case ' + (index + 1) + ' Failed';
-                testResultBadge.innerHTML = `<i class="fas fa-times"></i> ${failMessage}`;
-                testResultBadge.className = 'badge error';
-                if (testResults[index].error) {
-                    testActualDisplay.innerHTML += `<pre class="error">${testResults[index].error}</pre>`;
-                }
-                if (!isHidden) {
+                testResultBadge.innerHTML = 'failed';
+                testResultBadge.className = 'test-result-badge failed';
+                // Don't show error messages in the output section - only show the comparison
+                if (!testCase.hidden) {
                     testActualDisplay.innerHTML += `<pre class="error">Expected: ${expectedOutput}\nActual: ${actualOutput}</pre>`;
                 }
             }
         } else {
             actualOutputSection.style.display = 'none';
-            testResultBadge.innerHTML = '<i class="fas fa-minus"></i> Test Case ' + (index + 1) + ' Not Run';
-            testResultBadge.className = 'badge';
+            testResultBadge.innerHTML = 'not run';
+            testResultBadge.className = 'test-result-badge not-tested';
         }
     }
 }
@@ -536,30 +782,30 @@ function initUIHandlers() {
     const hintModalClose = document.getElementById('hintModalClose');
     const hintModalOk = document.getElementById('hintModalOk');
     
-    hintModalClose.addEventListener('click', () => hideHintModal());
-    hintModalOk.addEventListener('click', () => hideHintModal());
+    if (hintModalClose) hintModalClose.addEventListener('click', () => hideHintModal());
+    if (hintModalOk) hintModalOk.addEventListener('click', () => hideHintModal());
     
     // Results notification handlers
     const resultsNotification = document.getElementById('resultsNotification');
     const resultsNotificationClose = document.getElementById('resultsNotificationClose');
     
-    resultsNotificationClose.addEventListener('click', () => hideResultsNotification());
+    if (resultsNotificationClose) resultsNotificationClose.addEventListener('click', () => hideResultsNotification());
     
     // Results panel handlers
     const resultsPanel = document.getElementById('resultsPanel');
     const panelClose = document.getElementById('panelClose');
     const resultsOverlay = document.getElementById('resultsOverlay');
     
-    panelClose.addEventListener('click', () => hideResultsPanel());
-    resultsOverlay.addEventListener('click', () => hideResultsPanel());
+    if (panelClose) panelClose.addEventListener('click', () => hideResultsPanel());
+    if (resultsOverlay) resultsOverlay.addEventListener('click', () => hideResultsPanel());
     
     // Random challenge modal handlers
     const randomChallengeModal = document.getElementById('randomChallengeModal');
     const randomChallengeModalClose = document.getElementById('randomChallengeModalClose');
     const randomChallengeModalOk = document.getElementById('randomChallengeModalOk');
     
-    randomChallengeModalClose.addEventListener('click', () => hideRandomChallengeModal());
-    randomChallengeModalOk.addEventListener('click', () => hideRandomChallengeModal());
+    if (randomChallengeModalClose) randomChallengeModalClose.addEventListener('click', () => hideRandomChallengeModal());
+    if (randomChallengeModalOk) randomChallengeModalOk.addEventListener('click', () => hideRandomChallengeModal());
     
     // Submission modal handlers
     const submissionModal = document.getElementById('submissionModal');
@@ -567,23 +813,29 @@ function initUIHandlers() {
     const submissionModalClose2 = document.getElementById('submissionModalClose2');
     const loadNextChallenge = document.getElementById('loadNextChallenge');
     
-    submissionModalClose.addEventListener('click', () => hideSubmissionModal());
-    submissionModalClose2.addEventListener('click', () => hideSubmissionModal());
-    loadNextChallenge.addEventListener('click', () => {
+    if (submissionModalClose) submissionModalClose.addEventListener('click', () => hideSubmissionModal());
+    if (submissionModalClose2) submissionModalClose2.addEventListener('click', () => hideSubmissionModal());
+    if (loadNextChallenge) loadNextChallenge.addEventListener('click', () => {
         hideSubmissionModal();
         loadRandomChallenge();
     });
     
+    // Reference solution button
+    const showReferenceSolution = document.getElementById('showReferenceSolution');
+    if (showReferenceSolution) showReferenceSolution.addEventListener('click', () => {
+        showReferenceSolutionSection();
+    });
+    
     // Click outside to close modals
-    hintModal.addEventListener('click', (e) => {
+    if (hintModal) hintModal.addEventListener('click', (e) => {
         if (e.target === hintModal) hideHintModal();
     });
     
-    randomChallengeModal.addEventListener('click', (e) => {
+    if (randomChallengeModal) randomChallengeModal.addEventListener('click', (e) => {
         if (e.target === randomChallengeModal) hideRandomChallengeModal();
     });
     
-    submissionModal.addEventListener('click', (e) => {
+    if (submissionModal) submissionModal.addEventListener('click', (e) => {
         if (e.target === submissionModal) hideSubmissionModal();
     });
     
@@ -605,6 +857,22 @@ function hideHintModal() {
     const hintModal = document.getElementById('hintModal');
     hintModal.classList.remove('show');
 }
+
+// Global showLoading function for submit button
+function showLoading(show) {
+    const submitBtn = document.getElementById('submitCode');
+    if (submitBtn) {
+        if (show) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
+        }
+    }
+}
+
+
 
 function showResultsNotification(title, message, type = 'success') {
     const resultsNotification = document.getElementById('resultsNotification');
@@ -671,6 +939,12 @@ function showSubmissionModal(data) {
     const finalHints = document.getElementById('finalHints');
     const submissionMessage = document.getElementById('submissionMessage');
     
+    // Reset level up indicator
+    const levelUpItem = document.getElementById('levelUpItem');
+    if (levelUpItem) {
+        levelUpItem.style.display = 'none';
+    }
+    
     // Determine success status
     const isSuccess = data.success !== false && !data.error;
     
@@ -678,6 +952,22 @@ function showSubmissionModal(data) {
     submissionModal.className = `modal-overlay submission-modal ${isSuccess ? 'success' : 'error'}`;
     submissionIcon.className = isSuccess ? 'fas fa-trophy' : 'fas fa-exclamation-triangle';
     submissionTitle.textContent = isSuccess ? 'Submission Complete!' : 'Submission Failed';
+    
+    // Hide XP rewards section by default
+    const xpRewardsSection = document.getElementById('xpRewardsSection');
+    if (xpRewardsSection) {
+        xpRewardsSection.style.display = 'none';
+    }
+    
+    // Hide solution explanation and reference solution sections by default
+    const solutionSection = document.getElementById('solutionExplanationSection');
+    const referenceSection = document.getElementById('referenceSolutionSection');
+    if (solutionSection) {
+        solutionSection.style.display = 'none';
+    }
+    if (referenceSection) {
+        referenceSection.style.display = 'none';
+    }
     
     // Update stats
     if (finalScore) finalScore.textContent = `${score}/${currentChallenge?.max_score || 10}`;
@@ -705,46 +995,229 @@ function showSubmissionModal(data) {
             if (hiddenTotal > 0) {
                 message += `   • Hidden Tests: ${hiddenPassed}/${hiddenTotal} passed\n`;
             }
-            message += `   • Overall: ${totalPassed}/${totalTests} tests passed\n\n`;
-            
-            const passPercentage = Math.round((totalPassed / totalTests) * 100);
-            
-            if (passPercentage === 100) {
-                message += `🎉 Perfect! All tests passed!\n`;
-                message += `Your solution handles all test cases correctly, including edge cases and hidden validation tests.`;
-            } else if (passPercentage >= 80) {
-                message += `✅ Great job! Most tests passed.\n`;
-                message += `Your solution is mostly correct. Consider edge cases that might need attention.`;
-            } else if (passPercentage >= 60) {
-                message += `⚠️  Good progress, but some tests failed.\n`;
-                message += `Your solution works for basic cases but may need fixes for edge cases or error handling.`;
-            } else {
-                message += `❌ Several tests failed.\n`;
-                message += `Your solution needs significant improvements. Review the algorithm logic and test cases.`;
-            }
         } else {
-            message = data.message || 'Your submission has been processed.';
-        }
-        
-        // Add performance notes
-        if (getElapsedTime() < 60) {
-            message += `\n\n⚡ Fast completion time!`;
-        }
-        if (hintsUsed === 0) {
-            message += `\n🧠 No hints used - excellent problem-solving!`;
+            message = '';
         }
     }
-    
+    // XP Rewards Section
+    if (xpRewardsSection) {
+        const xpEarned = document.getElementById('xpEarned');
+        const newLevel = document.getElementById('newLevel');
+        const xpProgress = document.getElementById('xpProgress');
+        let xp = 0;
+        let level = localLevel;
+        let progress = `${localXP}/100`;
+        if (data.xp_reward) {
+            xp = data.xp_reward.xp_awarded || 0;
+            level = data.xp_reward.new_level || localLevel;
+            progress = `${data.xp_reward.new_xp || localXP}/100`;
+        } else if (data.xp_awarded !== undefined) {
+            xp = data.xp_awarded || 0;
+            level = data.new_level || localLevel;
+            progress = `${data.new_xp || localXP}/100`;
+        }
+        if (data.already_completed) {
+            xp = 0;
+        }
+        if (xpEarned) xpEarned.textContent = `+${xp}`;
+        if (newLevel) newLevel.textContent = level;
+        if (xpProgress) xpProgress.textContent = progress;
+        xpRewardsSection.style.display = 'block';
+    }
     if (submissionMessage) {
-        submissionMessage.textContent = message;
+        submissionMessage.innerHTML = message ? message.replace(/\n/g, '<br>') : '';
     }
-    
+    // Show solution explanation section for successful submissions
+    if (isSuccess) {
+        const solutionExplanationSection = document.getElementById('solutionExplanationSection');
+        const solutionExplanation = document.getElementById('solutionExplanation');
+        if (solutionExplanationSection && solutionExplanation) {
+            solutionExplanationSection.style.display = 'block';
+            // Add solution explanation content
+            const explanation = currentChallenge.solution_explanation || 
+                              'This challenge has been completed successfully. The solution involves identifying and fixing the bug in the provided code.';
+            solutionExplanation.innerHTML = explanation.replace(/\n/g, '<br>');
+        }
+        // Show reference solution button
+        const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
+        if (showReferenceSolutionBtn) {
+            showReferenceSolutionBtn.style.display = 'inline-flex';
+        }
+        // Show next challenge button for successful submissions
+        const loadNextChallengeBtn = document.getElementById('loadNextChallenge');
+        if (loadNextChallengeBtn) {
+            loadNextChallengeBtn.style.display = 'inline-flex';
+        }
+    } else {
+        // Hide next challenge button for failed submissions
+        const loadNextChallengeBtn = document.getElementById('loadNextChallenge');
+        if (loadNextChallengeBtn) {
+            loadNextChallengeBtn.style.display = 'none';
+        }
+        // Hide reference solution button for failed submissions
+        const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
+        if (showReferenceSolutionBtn) {
+            showReferenceSolutionBtn.style.display = 'none';
+        }
+    }
     submissionModal.classList.add('show');
 }
 
 function hideSubmissionModal() {
     const submissionModal = document.getElementById('submissionModal');
     submissionModal.classList.remove('show');
+    // Ensure test case buttons/results are updated after modal closes
+    updateTestResults();
+    updateActiveTestCaseButton();
+}
+
+// Patch showReferenceSolutionSection to always show Next Challenge button
+function showReferenceSolutionSection() {
+    // Show the reference solution section
+    const referenceSolutionSection = document.getElementById('referenceSolutionSection');
+    if (referenceSolutionSection) {
+        referenceSolutionSection.style.display = 'block';
+        void referenceSolutionSection.offsetHeight; // Force reflow
+    }
+    // Hide the reference solution button
+    const showReferenceSolutionBtn = document.getElementById('showReferenceSolution');
+    if (showReferenceSolutionBtn) {
+        showReferenceSolutionBtn.style.display = 'none';
+        void showReferenceSolutionBtn.offsetHeight; // Force reflow
+    }
+    // Fill in the reference solution content if it exists
+    const referenceSolution = document.getElementById('referenceSolution');
+    if (referenceSolution) {
+        const solution = currentChallenge && currentChallenge.reference_solution ? currentChallenge.reference_solution : 'def solution_function():\n    # Reference solution will be displayed here\n    pass';
+        const formattedSolution = solution.replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
+        referenceSolution.innerHTML = `<pre><code>${formattedSolution}</code></pre>`;
+        void referenceSolution.offsetHeight; // Force reflow
+    }
+    // Always show Next Challenge button in the modal footer
+    const loadNextChallengeBtn = document.getElementById('loadNextChallenge');
+    if (loadNextChallengeBtn) {
+        loadNextChallengeBtn.style.display = 'inline-flex';
+        loadNextChallengeBtn.disabled = false;
+        loadNextChallengeBtn.classList.remove('hidden');
+        void loadNextChallengeBtn.offsetHeight; // Force reflow
+    }
+}
+
+function hideRandomChallengeModal() {
+    const randomChallengeModal = document.getElementById('randomChallengeModal');
+    if (randomChallengeModal) {
+        randomChallengeModal.classList.remove('show');
+    }
+}
+
+async function loadRandomChallenge() {
+    try {
+        // Show loading indicator
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'flex';
+        }
+        
+        // Load a random challenge
+        await loadCurrentChallenge();
+        
+        // Hide loading indicator
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+        
+        // Show success notification
+        showResultsNotification('Challenge Loaded', 'Random challenge has been loaded successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error loading random challenge:', error);
+        showResultsNotification('Error', 'Failed to load random challenge. Please try again.', 'error');
+        
+        // Hide loading indicator
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+    }
+}
+
+// Flag to prevent multiple completion calls
+let challengeCompletionInProgress = false;
+
+// Mark challenge as completed via API with specific time and score
+async function markChallengeAsCompletedWithTime(timeTaken, score) {
+    // Prevent multiple calls
+    if (challengeCompletionInProgress) {
+        console.log('Challenge completion already in progress, skipping...');
+        return;
+    }
+    
+    try {
+        challengeCompletionInProgress = true;
+        
+        const username = localStorage.getItem('currentUser') || localStorage.getItem('username');
+        if (!username || !currentChallenge) {
+            console.error('No username or challenge available for marking as completed');
+            return;
+        }
+        
+        console.log(`⏱️ Challenge completed! Time taken: ${timeTaken} seconds (${formatTime(timeTaken)})`);
+        console.log(`🏆 Score to award: ${score} XP`);
+        
+        const requestBody = {
+            username: username,
+            language: currentChallenge.language || currentLanguage,
+            difficulty: currentChallenge.difficulty,
+            challenge_id: currentChallenge.challenge_id,
+            challenge_title: currentChallenge.title,
+            time_taken: timeTaken,
+            score: score
+        };
+        
+        console.log(`📤 Sending completion request:`, requestBody);
+        
+        const response = await fetch(getApiUrl('/challenge/complete'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        console.log(`📥 Received completion response:`, data);
+        
+        if (data.success) {
+            console.log(`✅ Challenge marked as completed successfully (Time: ${timeTaken}s, Score: ${score} XP)`);
+            
+            // Update the current challenge to show as solved
+            currentChallenge.is_solved = true;
+            updateChallengeDisplay();
+            
+            // Update XP display if new level reached
+            if (data.new_level) {
+                updateXPDisplay(data.new_xp, data.new_level);
+                showResultsNotification('Level Up!', `Congratulations! You reached level ${data.new_level}!`, 'success');
+            } else if (data.xp_awarded) {
+                updateXPDisplay(data.new_xp, localLevel);
+            }
+        } else {
+            console.error('❌ Failed to mark challenge as completed:', data.error);
+        }
+    } catch (error) {
+        console.error('Error marking challenge as completed:', error);
+    } finally {
+        // Reset flag after completion (success or failure)
+        challengeCompletionInProgress = false;
+    }
+}
+
+// Mark challenge as completed via API (legacy function)
+async function markChallengeAsCompleted() {
+    // Stop the timer and get the final time
+    stopTimer();
+    const timeTaken = getElapsedTime();
+    await markChallengeAsCompletedWithTime(timeTaken);
 }
 
 // Apply theme based on difficulty level
@@ -910,6 +1383,201 @@ function updateScore() {
     });
 }
 
+// Update XP display and level
+function updateXPDisplay(xp, level) {
+    localXP = xp;
+    localLevel = level;
+    const xpElement = document.getElementById('currentXP');
+    const levelElement = document.getElementById('currentLevel');
+    const xpBar = document.getElementById('xpBar');
+    const xpProgress = document.getElementById('xpProgress');
+    
+    if (xpElement) {
+        xpElement.textContent = xp;
+    }
+    
+    if (levelElement) {
+        levelElement.textContent = level;
+    }
+    
+    // Update XP progress bar
+    if (xpBar && xpProgress) {
+        const progress = (xp % 100) / 100 * 100;
+        xpProgress.style.width = `${progress}%`;
+        xpBar.setAttribute('data-progress', `${progress}%`);
+    }
+}
+
+// Load user XP and level from backend
+async function loadUserXP(username) {
+    try {
+        const response = await fetch(getApiUrl(`/user/stats/${username}`));
+        const data = await response.json();
+        if (data.success) {
+            localXP = data.xp;
+            localLevel = data.level;
+            updateXPDisplay(localXP, localLevel);
+        }
+    } catch (error) {
+        console.error('Error loading user XP:', error);
+    }
+}
+
+// Add level calculation function
+function calculateLevel(xp) {
+    return Math.floor(xp / 100) + 1;
+}
+
+function calculateXPForLevel(level) {
+    return (level - 1) * 100;
+}
+
+function calculateRemainingXP(xp) {
+    return xp % 100;
+}
+
+// Update the animation function with proper level calculation
+function animateXPBarWithLocalState(xpGained, newXP, currentLevel, newLevel) {
+    const xpElement = document.getElementById('currentXP');
+    const levelElement = document.getElementById('currentLevel');
+    const xpBar = document.getElementById('xpBar');
+    const xpProgress = document.getElementById('xpProgress');
+    
+    if (!xpElement || !levelElement || !xpBar || !xpProgress) return;
+    
+    let startXP = localXP;
+    let startLevel = localLevel;
+    let endXP = newXP;
+    let endLevel = newLevel || calculateLevel(endXP);
+    let xpToAdd = xpGained;
+    let steps = 30;
+    let step = 0;
+    let xpPerStep = xpToAdd / steps;
+    let currentXP = startXP;
+    let animLevel = startLevel;
+    
+    console.log(`🎯 Animation Start: XP=${startXP}, Level=${startLevel}`);
+    console.log(`🎯 Animation End: XP=${endXP}, Level=${endLevel}`);
+    console.log(`🎯 Expected final level calculation: ${calculateLevel(endXP)}`);
+    
+    function stepAnim() {
+        if (step >= steps) {
+            // Animation complete - ensure final state is set correctly
+            localXP = endXP;
+            localLevel = endLevel;
+            
+            console.log(`✅ Animation Complete: XP=${localXP}, Level=${localLevel}`);
+            console.log(`✅ Final calculated level: ${calculateLevel(localXP)}`);
+            
+            // Force update the display with final values
+            xpElement.textContent = Math.floor(localXP);
+            levelElement.textContent = localLevel;
+            
+            // Update progress bar with final state
+            let remainingXP = calculateRemainingXP(localXP);
+            let progress = (remainingXP / 100) * 100;
+            xpProgress.style.width = `${progress}%`;
+            xpBar.setAttribute('data-progress', `${progress}%`);
+            
+            // Call updateXPDisplay to ensure consistency
+            updateXPDisplay(localXP, localLevel);
+            
+            return;
+        }
+        
+        step++;
+        currentXP += xpPerStep;
+        
+        // Check if level up should occur
+        let newCalculatedLevel = calculateLevel(currentXP);
+        if (newCalculatedLevel > animLevel) {
+            console.log(`🎉 LEVEL UP! ${animLevel} -> ${newCalculatedLevel}`);
+            animLevel = newCalculatedLevel;
+            
+            // Shake effect only on level element
+            levelElement.classList.add('level-up-shake');
+            setTimeout(() => levelElement.classList.remove('level-up-shake'), 500);
+            
+            // XP bar glow effect
+            xpBar.classList.add('xp-bar-level-up');
+            setTimeout(() => xpBar.classList.remove('xp-bar-level-up'), 500);
+            
+            // Show level up notification
+            showResultsNotification('Level Up!', `Congratulations! You reached level ${animLevel}!`, 'success');
+        }
+        
+        // Update display
+        xpElement.textContent = Math.floor(currentXP);
+        levelElement.textContent = animLevel;
+        
+        // Update progress bar (show remaining XP for current level)
+        let remainingXP = calculateRemainingXP(currentXP);
+        let progress = (remainingXP / 100) * 100;
+        xpProgress.style.width = `${progress}%`;
+        xpBar.setAttribute('data-progress', `${progress}%`);
+        
+        setTimeout(stepAnim, 50);
+    }
+    
+    stepAnim();
+}
+
+// Test function to simulate level-up animation (for debugging)
+function testLevelUpAnimation() {
+    console.log('🧪 Testing level-up animation...');
+    const xpElement = document.getElementById('currentXP');
+    const levelElement = document.getElementById('currentLevel');
+    
+    if (xpElement && levelElement) {
+        // Set current state (85 XP, Level 1)
+        xpElement.textContent = '85';
+        levelElement.textContent = '1';
+        localXP = 85;
+        localLevel = 1;
+        
+        console.log('🔍 Initial state:');
+        console.log(`   XP: ${localXP}`);
+        console.log(`   Level: ${localLevel}`);
+        console.log(`   Calculated Level: ${calculateLevel(localXP)}`);
+        
+        // Simulate level-up animation (gain 25 XP to reach 110 XP = Level 2)
+        setTimeout(() => {
+            console.log('🎯 Testing: 85 XP + 25 XP = 110 XP (Level 2)');
+            console.log(`   Expected final XP: 110`);
+            console.log(`   Expected final Level: ${calculateLevel(110)}`);
+            animateXPBarWithLocalState(25, 110, 1, 2);
+        }, 1000);
+    }
+}
+
+// Add a simple test function to check level calculation
+function testLevelCalculation() {
+    console.log('🧮 Testing level calculations:');
+    console.log(`   XP 0: Level ${calculateLevel(0)}`);
+    console.log(`   XP 50: Level ${calculateLevel(50)}`);
+    console.log(`   XP 100: Level ${calculateLevel(100)}`);
+    console.log(`   XP 110: Level ${calculateLevel(110)}`);
+    console.log(`   XP 200: Level ${calculateLevel(200)}`);
+}
+
+// Add a function to manually test level display update
+function testLevelDisplay() {
+    console.log('🖥️ Testing level display update...');
+    const levelElement = document.getElementById('currentLevel');
+    if (levelElement) {
+        console.log(`   Current level display: ${levelElement.textContent}`);
+        levelElement.textContent = '2';
+        console.log(`   Updated level display: ${levelElement.textContent}`);
+        
+        // Test the shake effect
+        levelElement.classList.add('level-up-shake');
+        setTimeout(() => {
+            levelElement.classList.remove('level-up-shake');
+            console.log('   Shake effect applied and removed');
+        }, 500);
+    }
+}
+
 // Submit code for validation
 async function submitSolution() {
     if (!currentChallenge) {
@@ -917,132 +1585,148 @@ async function submitSolution() {
         return;
     }
 
-    const code = editor.getValue();
-    if (!code.trim()) {
-        showResultsNotification('Error', 'Please write some code first', 'error');
+    if (!editor) {
+        showResultsNotification('Error', 'Code editor not initialized', 'error');
         return;
     }
 
+    const code = editor.getValue();
+    if (!code.trim()) {
+        showResultsNotification('Error', 'Please write some code before submitting', 'error');
+        return;
+    }
+
+    showLoading(true);
+    
+    // Increment attempts
+    attempts++;
+
     try {
-        // Show loading state
-        const submitBtn = document.getElementById('submitCode');
-        if (!submitBtn) {
-            console.error('Submit button not found');
-            showResultsNotification('Error', 'Internal error: Submit button not found', 'error');
-            return;
-        }
+        // Get username from localStorage
+        const username = localStorage.getItem('currentUser') || localStorage.getItem('username');
+        
+        const requestData = {
+            code: code,
+            language: currentLanguage,
+            challenge_id: currentChallenge.challenge_id,
+            difficulty: currentChallenge.difficulty,
+            username: username  // Include username for XP rewards
+        };
 
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
-        submitBtn.disabled = true;
+        console.log('Submitting solution...', requestData);
 
-        // Initialize test results and show running state
-        testResults = [];
-        testCases.forEach((_, index) => {
-            testResults[index] = { status: 'running' };
-            showTestCase(index);
+        const response = await fetch(getApiUrl('/validate'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
         });
 
-        try {
-            const response = await fetch(getApiUrl('/validate'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    code: code,
-                    language: currentLanguage,
-                    challenge_id: currentChallenge.challenge_id,
-                    difficulty: currentChallenge.difficulty
-                })
-            });
+        const data = await response.json();
+        console.log('Submission response:', data);
 
-            const data = await response.json();
-            console.log('Submission results:', data);
-
-            // Process visible test results first with delay
-            if (data.visible_results && data.visible_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Visible Tests...';
-                for (let i = 0; i < data.visible_results.test_results.length; i++) {
-                    testResults[i] = data.visible_results.test_results[i];
-                    showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
-                }
-            }
-
-            // Process hidden test results
-            if (data.hidden_results && data.hidden_results.test_results) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Hidden Tests...';
-                const startIndex = testResults.length;
-                for (let i = 0; i < data.hidden_results.test_results.length; i++) {
-                    const result = data.hidden_results.test_results[i];
-                    testResults[startIndex + i] = {
-                        ...result,
-                        output: result.passed ? '[Hidden Test Output]' : 'Test Failed',
-                        error: result.error || (result.passed ? null : 'Hidden test case failed')
-                    };
-                    showTestCase(startIndex + i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
-                }
-            }
-
-            updateTestResults();
-
-            if (data.success && data.all_passed) {
-                // Show success message with score
-                showResultsNotification(
-                    'Success', 
-                    `Congratulations! All test cases passed (including hidden tests). Score: ${data.score}`, 
-                    'success'
-                );
-                
-                // Update user progress if needed
-                if (typeof updateUserProgress === 'function') {
-                    updateUserProgress(currentChallenge.challenge_id, data.score);
-                }
-            } else {
-                // Show appropriate error message
-                if (data.error === 'Hidden test cases failed') {
-                    const visiblePassed = data.visible_results.test_results.every(r => r.passed);
-                    const message = visiblePassed ?
-                        'Your code passed all visible test cases but failed some hidden test cases. Try to make your solution more robust!' :
-                        'Some test cases failed. Please check the results and try again.';
-                    showResultsNotification('Warning', message, 'warning');
-                } else {
-                    showResultsNotification(
-                        'Error',
-                        data.error || 'Not all test cases passed. Please fix your solution and try again.',
-                        'error'
-                    );
-                }
-            }
-        } finally {
-            // Always reset button state
-            if (submitBtn) {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }
-        }
-    } catch (error) {
-        console.error('Error submitting solution:', error);
-        showResultsNotification('Error', 'Failed to submit solution: ' + error.message, 'error');
+        console.log(`🔍 Submission result analysis:`);
+        console.log(`   data.success: ${data.success}`);
+        console.log(`   data.all_passed: ${data.all_passed}`);
+        console.log(`   Condition met: ${data.success && data.all_passed}`);
         
-        // Reset button state if we can
-        const submitBtn = document.getElementById('submitCode');
-        if (submitBtn) {
-            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
-            submitBtn.disabled = false;
+        if (data.success && data.all_passed) {
+            // Stop timer for successful submission (regardless of already completed status)
+            console.log(`🎯 SUCCESSFUL SUBMISSION - Stopping timer...`);
+            stopTimer();
+            const finalTime = getElapsedTime();
+            console.log(`⏱️ Successful submission! Time taken: ${finalTime} seconds`);
+            
+            // Always update testResults and UI with backend results
+            if (Array.isArray(data.test_results)) {
+                testResults = data.test_results;
+                console.log("passed");
+                updateTestResults();
+            }
+            // Only show modal if all tests passed
+            showSubmissionModal(data);
+            // Only award XP if not already completed (backend) and not already solved (frontend)
+            if (!data.already_completed && !(currentChallenge && currentChallenge.is_solved)) {
+                console.log(`✅ Marking challenge as completed with time: ${finalTime}s and score: ${score}`);
+                markChallengeAsCompletedWithTime(finalTime, score);
+            } else {
+                console.log(`⚠️ Challenge already completed - not calling /api/challenge/complete`);
+            }
+        } else if (data.success && Array.isArray(data.test_results)) {
+            // Check if all visible test cases passed but some hidden failed
+            // Assume visible test cases are always first in the array
+            const numVisible = testCases.length;
+            const visiblePassed = data.test_results.slice(0, numVisible).every(r => r && r.passed);
+            const hiddenFailed = data.test_results.slice(numVisible).some(r => r && !r.passed);
+            if (visiblePassed && hiddenFailed) {
+                testResults = data.test_results;
+                updateTestResults();
+                updateActiveTestCaseButton();
+                showResultsNotification('Warning', 'Failed on hidden test cases.', 'warning');
+            } else {
+                // Partial success - some visible tests failed or only hidden tests failed
+                if (Array.isArray(data.test_results)) {
+                    testResults = data.test_results;
+                    updateTestResults();
+                    updateActiveTestCaseButton();
+                }
+                // Only show warning if some tests failed
+                const testsPassedCount = data.test_results.filter(r => r && r.passed).length;
+                const totalTestsCount = data.test_results.length;
+                const failedTests = totalTestsCount - testsPassedCount;
+                if (failedTests > 0) {
+                    showResultsNotification('Partial Success', 'Some tests passed, but not all', 'warning');
+                }
+            }
+        } else {
+            // Failed - deduct points
+            // Timer continues running for failed submissions
+            console.log(`⏱️ Failed submission! Timer continues...`);
+            score = Math.max(2, score - 3); // Deduct 3 points but keep minimum at 2
+            updateScore();
+            // Update testResults and UI with backend results
+            if (Array.isArray(data.test_results)) {
+                testResults = data.test_results;
+                updateTestResults();
+            }
+            // Only show notification, not the modal
+            showResultsNotification('Wrong Submission', data.error || 'Your submission failed on one or more test cases.', 'error');
         }
+
+    } catch (error) {
+        console.error('Submission error:', error);
+        showResultsNotification('Error', 'Failed to submit solution', 'error');
+    } finally {
+        showLoading(false);
     }
 }
 
 // Update loadCurrentChallenge to use correct API endpoint
 async function loadCurrentChallenge() {
     try {
-        const data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}`);
+        // Get current username for solved status check
+        const username = localStorage.getItem('currentUser') || localStorage.getItem('username');
+        const usernameParam = username ? `?username=${encodeURIComponent(username)}` : '';
+        
+        // First try to load the specific challenge ID
+        let data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/${currentChallengeId}${usernameParam}`);
+        
+        // If specific challenge not found, fall back to first available challenge
+        if (!data.success) {
+            console.log(`Challenge ${currentChallengeId} not found, loading first available challenge...`);
+            data = await fetchWithCache(`/challenge/${currentLanguage}/${currentDifficulty}/first${usernameParam}`);
+            
+            // Update currentChallengeId to match the actually loaded challenge
+            if (data.success && data.challenge) {
+                currentChallengeId = data.challenge.challenge_id;
+                console.log(`Loaded first available challenge: ${currentChallengeId}`);
+            }
+        }
         
         if (data.success) {
             currentChallenge = data.challenge;
+            currentChallenge.is_solved = data.is_solved || false;
             testCases = currentChallenge.test_cases || [];
             challengeHints = Array.isArray(currentChallenge.hints) ? currentChallenge.hints : [];
             revealedHints = [];
@@ -1053,6 +1737,12 @@ async function loadCurrentChallenge() {
             wrongSubmissions = 0;
             attempts = 0;
             startTime = Date.now();
+            
+            // Initialize timer display
+            initTimer();
+            
+            // Clear cached test results for new challenge
+            clearCachedTestResults();
             
             updateChallengeDisplay();
             updateScore();
@@ -1065,7 +1755,7 @@ async function loadCurrentChallenge() {
             }
             
         } else {
-            throw new Error(data.error);
+            throw new Error(data.error || 'No challenges available');
         }
         
     } catch (error) {
@@ -1088,7 +1778,9 @@ function updateChallengeDisplay() {
     const difficultyBadge = document.getElementById('difficultyBadge');
     
     if (titleElement && currentChallenge.title) {
-        titleElement.textContent = currentChallenge.title;
+        // Add solved tag if challenge is completed
+        const solvedTag = currentChallenge.is_solved ? '<div class="solved-tag">✓ Solved</div>' : '';
+        titleElement.innerHTML = `${currentChallenge.title}${solvedTag}`;
     }
     
     if (difficultyBadge && currentChallenge.difficulty) {
@@ -1208,22 +1900,31 @@ async function runTests() {
             return;
         }
 
-        // Initialize test results
+        // Initialize test results - set all to running state
         testResults = [];
-        // Show initial state for all test cases
         if (!testCases || !Array.isArray(testCases)) {
             showResultsNotification('Error', 'No test cases available', 'error');
             return;
         }
 
+        // Set all test cases to running state
         testCases.forEach((_, index) => {
             testResults[index] = { status: 'running' };
-            showTestCase(index);
         });
+        
+        // Update button colors (will show no status while running)
+        updateActiveTestCaseButton();
 
-        // Update button state
+        // Hide test status until results are available
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
+
+        // Update button state with better messaging
         if (runBtn) {
-            runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Tests...';
+            const testCount = testCases.length;
+            runBtn.innerHTML = `<i class="fas fa-rocket fa-spin"></i> Running ${testCount} tests (batch mode)...`;
             runBtn.disabled = true;
         }
 
@@ -1233,10 +1934,17 @@ async function runTests() {
             language: currentLanguage,
             test_cases: testCases
         };
+        // Add challenge_id and difficulty if available
+        if (currentChallenge && currentChallenge.challenge_id) {
+            requestData.challenge_id = currentChallenge.challenge_id;
+        }
+        if (currentChallenge && currentChallenge.difficulty) {
+            requestData.difficulty = currentChallenge.difficulty;
+        }
 
-        // Execute tests with timeout
+        // Execute tests with optimized timeout for batch execution
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for batch processing
 
         try {
             const response = await fetch(getApiUrl('/execute'), {
@@ -1250,49 +1958,91 @@ async function runTests() {
 
             clearTimeout(timeoutId);
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                // If not JSON, show a user-friendly error
+                const text = await response.text();
+                showResultsNotification('Error', 'Server error: ' + (text.slice(0, 200) || 'Invalid response from server.'), 'error');
+                testResults = [];
+                updateTestResults();
+                return;
+            }
             console.log('Test results:', data);
 
             if (data.success) {
                 // Ensure test_results exists and is an array
                 const testResultsArray = Array.isArray(data.test_results) ? data.test_results : [];
                 
-                // Process test results one by one with a small delay for visual feedback
-                for (let i = 0; i < testResultsArray.length; i++) {
-                    testResults[i] = testResultsArray[i];
-                    showTestCase(i);
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tests
+                // Process all test results at once for better performance
+                testResults = testResultsArray;
+                
+                // Cache results for optimization (for submitSolution)
+                lastRunCode = code;
+                lastRunResults = [...testResultsArray]; // Deep copy
+                // Calculate passed/total tests from testResultsArray
+                const testsPassedCount = testResultsArray.filter(r => r && r.passed).length;
+                const totalTestsCount = testResultsArray.length;
+                lastRunAllPassed = (testsPassedCount === totalTestsCount && totalTestsCount > 0);
+                
+                // Show test status now that results are available
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'block';
                 }
                 
+                // Update UI with all results
                 updateTestResults();
                 
                 // Show success/failure message
-                const testsPassedCount = data.tests_passed || 0;
-                const totalTestsCount = data.total_tests || testResultsArray.length;
-                
-                if (testsPassedCount === totalTestsCount) {
-                    showResultsNotification('Success', 'All test cases passed! Try submitting your solution.', 'success');
+                if (lastRunAllPassed) {
+                    showResultsNotification('Success', 'All visible test cases passed! Try submitting your solution.', 'success');
                 } else {
                     const failedTests = totalTestsCount - testsPassedCount;
-                    const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
-                    showResultsNotification('Warning', failMessage, 'warning');
+                    if (failedTests > 0) {
+                        const failMessage = `${testsPassedCount} out of ${totalTestsCount} test cases passed. ${failedTests} test${failedTests > 1 ? 's' : ''} failed.`;
+                        showResultsNotification('Warning', failMessage, 'warning');
+                    }
                 }
             } else {
                 testResults = [];  // Reset test results on error
+                // Hide test status on error
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
                 updateTestResults();
-                showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
+                
+                // Check for compilation errors
+                if (data.phase === 'COMPILATION') {
+                    showResultsNotification('Error In Compilation', data.error || 'Your code has syntax or indentation errors that prevent compilation.', 'compilation');
+                } else {
+                    showResultsNotification('Error', data.error || 'Failed to run tests', 'error');
+                }
             }
         } catch (error) {
             if (error.name === 'AbortError') {
-                showResultsNotification('Error', 'Test execution timed out. Please try again.', 'error');
+                testResults = [];
+                const testStatusElement = document.getElementById('testStatus');
+                if (testStatusElement) {
+                    testStatusElement.style.display = 'none';
+                }
+                updateTestResults();
+                showResultsNotification('Timeout', 'Test execution took longer than expected. This might be due to network issues or complex test cases. Please try again.', 'error');
             } else {
-                throw error;
+                showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
             }
         }
 
     } catch (error) {
         console.error('Error running tests:', error);
         testResults = [];  // Reset test results on error
+        // Hide test status on error
+        const testStatusElement = document.getElementById('testStatus');
+        if (testStatusElement) {
+            testStatusElement.style.display = 'none';
+        }
         updateTestResults();
         showResultsNotification('Error', 'Failed to run tests: ' + error.message, 'error');
     } finally {
@@ -1307,10 +2057,24 @@ function updateTestResults() {
         testResults = [];  // Initialize if undefined
     }
     
-    // Update test panel for each test case
-    testCases.forEach((_, index) => {
-        showTestCase(index);
-    });
+    // Update test case buttons to show their status immediately
+    updateActiveTestCaseButton();
+    
+    // Find the first failed test case
+    let firstFailedIndex = -1;
+    for (let i = 0; i < testResults.length; i++) {
+        if (testResults[i] && !testResults[i].passed) {
+            firstFailedIndex = i;
+            break;
+        }
+    }
+    
+    // If there are failed tests, automatically navigate to the first failed test
+    if (firstFailedIndex !== -1) {
+        currentTestCase = firstFailedIndex;
+        showTestCase(currentTestCase);
+        updateActiveTestCaseButton();
+    }
     
     // Update overall test status
     const passedTests = testResults.filter(result => result && result.passed).length;
@@ -1325,6 +2089,13 @@ function updateTestResults() {
 // Get elapsed time in seconds
 function getElapsedTime() {
     return Math.floor((Date.now() - startTime) / 1000);
+}
+
+// Format time in MM:SS format
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
 // Change programming language
@@ -1345,6 +2116,9 @@ function changeLanguage(event) {
     attempts = 0;
     startTime = Date.now();
     updateScore();
+    
+    // Clear cached test results when language changes
+    clearCachedTestResults();
     
     loadCurrentChallenge();
 }
@@ -1436,3 +2210,7 @@ async function loadProblemsForDifficulty(difficulty) {
         problemsList.innerHTML = '<div class="error-message">Error loading problems</div>';
     }
 }
+
+// Add at the top of the file, after other top-level variables:
+let localLevel = 1;
+let localXP = 0;

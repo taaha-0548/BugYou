@@ -1,186 +1,210 @@
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body, html {
-  height: 100%;
-  font-family: 'Pixelify Sans', monospace;
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow-x: hidden;
+  font-family: 'Press Start 2P', cursive;
+  background-color: #0D0D0D;
   color: white;
-  overflow-x: hidden;
 }
 
-body{
-  font-size:1.2rem;
-}
-#bg-video {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 122vw;
-  height: 122vh;
-  object-fit: cover;
-  z-index: -1;
-}
-
-.overlay {
-  background: rgba(0, 0, 0, 0.5);
+.content {
+  position: relative; z-index: 1;
   min-height: 100vh;
-  min-width: 100vw;
   padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  background: rgba(13, 13, 13, 0.1);
 }
 
-
+/* Navbar */
 .navbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1rem;
+  font-size: 0.8rem;
   padding: 1rem 2rem;
   background: rgba(0, 0, 0, 0.4);    
   backdrop-filter: blur(10px);          
   border-radius: 12px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);}
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  margin-bottom: 3rem;
+}
+
 .navbar nav a {
   margin-left: 1.5rem;
   text-decoration: none;
   color: white;
+  transition: all 0.3s ease;
 }
+
 .navbar nav a:hover {
-  color: #00ffff;
-  text-shadow: 0 0 8px #00ffff;
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
   transform: scale(1.1);
 }
 
-.content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 3rem;
-  flex-wrap: wrap;
-}
-
-.left, .right {
-  flex: 1 1 45%;
-  max-width: 500px;
-  margin: 1rem;
-}
 .logo {
   display: flex;
   align-items: center;
   gap: 0.5rem; 
 }
 
-.logo img{
+.logo-img {
   width: 30px;
   height: 30px;
+  filter: drop-shadow(0 0 10px #10B981);
 }
 
-
-.typewriter-line {
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 4rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-}
-
-.glitch-letter {
-  position: relative;
-  color: white;
-  text-shadow:
-    1px 0 blue,  
-    -1px 0 red;   
-}
-
-.glitch-letter::before,
-.glitch-letter::after {
-  display: none; 
-}
-
-
-
-.glitch-text {
-  font-size: 1.5rem;
-  position: relative;
-  display: inline-block;
-}
-
-.glitch-text::before,
-.glitch-text::after {
-  content: attr(data-text);
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 1;
-}
-
-
-
-.signup-form {
-  background-color: rgba(0, 0, 0, 0.6);
-  padding: 2rem;
-  border-radius: 15px;
-  backdrop-filter: blur(5px);
-}
-
-.signup-form h2 {
-  margin-bottom: 1rem;
-}
-
-.signup-form input, .signup-form button {
-  width: 100%;
-  margin-top: 1rem;
-  padding: 0.8rem;
-  border: none;
-  border-radius: 10px;
+.logo-text {
   font-size: 1rem;
-}
-.typewriter-line{
-  font-size: 4rem;
-}
-.signup-form input {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
+  text-shadow: 0 0 10px #10B981;
 }
 
-.signup-form button {
-  background-color: #4f46e5;
-  color: white;
-  cursor: pointer;
-  padding: 0.9rem 1.2rem;
-  font-weight: bold;
+/* Signup Content */
+.signup-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 200px);
+}
+
+.signup-container {
+  background: rgba(16, 185, 129, 0.05);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  padding: 3rem;
   border-radius: 12px;
-  border: none;
-  box-shadow: 0 4px 0 #3b3bbf;
+  backdrop-filter: blur(6px);
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
   transition: all 0.3s ease;
-  transform: translateY(0);
 }
 
-.signup-form button:hover {
-  background-color: #6366f1;
-  box-shadow:
-    0 0 12px #6366f1,
-    0 0 20px #6366f1,
-    0 5px 15px rgba(0, 0, 0, 0.3);
+.signup-container:hover {
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.3);
   transform: translateY(-2px);
 }
 
-
-.single-line-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 1rem;
+.signup-header {
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
-.login-link {
-  margin-left: 0.3rem;
-  text-decoration: underline;
-  color: #00ffff;
+.main-title {
+  font-size: 2rem;
+  color: #10B981;
+  text-shadow: 0 0 20px #10B981, 0 0 40px #10B981;
+  margin-bottom: 1rem;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes titleGlow {
+  from { text-shadow: 0 0 20px #10B981, 0 0 40px #10B981; }
+  to { text-shadow: 0 0 30px #10B981, 0 0 60px #10B981; }
+}
+
+.subtitle {
+  font-size: 0.6rem;
+  color: #a3f7bf;
+  text-shadow: 0 0 8px #10B981;
+  line-height: 1.4;
+}
+
+/* Form */
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.6rem;
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+}
+
+.input {
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 8px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #10B981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.btn {
+  padding: 1.2rem 2rem;
+  background: #10B981;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #0D0D0D;
+  box-shadow: 0 0 20px #10B981;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.btn:hover {
+  background: #0f966c;
+  box-shadow: 0 0 40px #0f966c;
+  transform: translateY(-3px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s;
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+/* Form Footer */
+.form-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+.form-footer p {
+  font-size: 0.6rem;
+  color: #e2e2e2;
+}
+
+.link {
+  color: #10B981;
+  text-shadow: 0 0 8px #10B981;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.link:hover {
+  color: #0f966c;
+  text-shadow: 0 0 12px #0f966c;
 }
