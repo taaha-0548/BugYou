@@ -1920,7 +1920,7 @@ async function runTests() {
         // Update button state with better messaging
         if (runBtn) {
             const testCount = testCases.length;
-            runBtn.innerHTML = `<i class="fas fa-rocket fa-spin"></i> Running ${testCount} tests (batch mode)...`;
+            runBtn.innerHTML = `<i class="fas fa-rocket fa-spin"></i> Running `;
             runBtn.disabled = true;
         }
 
