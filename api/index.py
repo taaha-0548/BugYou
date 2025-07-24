@@ -1485,15 +1485,7 @@ def build_driver_snippet(func_name, param_names, language):
         args = ", ".join(f"tc[{i}]" for i in range(len(param_names)))
         return f"{func_name}({args})"
 
-if __name__ == '__main__':
-    print("🔌 Testing database connection...")
-    if test_connection():
-        print("✅ Database connected successfully!")
-        
-        print("🚀 Starting BugYou Flask server...")
-        print("📍 Frontend: http://localhost:5000")
-        print("🔗 API Health: http://localhost:5000/api/health")
-        app.run(host='0.0.0.0', debug=True)
-    else:
-        print("❌ Failed to connect to database. Please check your configuration.")
-        exit(1)
+# Remove the __main__ block for serverless deployment
+# Add vercel_wsgi handler for Vercel
+from vercel_wsgi import make_lambda_handler
+handler = make_lambda_handler(app)
