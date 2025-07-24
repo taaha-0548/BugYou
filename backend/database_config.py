@@ -14,11 +14,11 @@ from datetime import datetime
 
 # Database connection settings for Neon DB
 DATABASE_CONFIG = {
-    'dbname': 'neondb',
-    'user': 'neondb_owner',
-    'password': 'npg_zfHPGRA2Jr0m',
-    'host': 'ep-bold-darkness-a17nsgge-pooler.ap-southeast-1.aws.neon.tech',
-    'sslmode': 'require'
+    'dbname': os.environ.get('DB_NAME'),
+    'user': os.environ.get('DB_USER'),
+    'password': os.environ.get('DB_PASSWORD'),
+    'host': os.environ.get('DB_HOST'),
+    'sslmode': os.environ.get('DB_SSLMODE', 'require')
 }
 
 # Connection pool for better performance

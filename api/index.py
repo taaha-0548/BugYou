@@ -1323,7 +1323,7 @@ def api_signup():
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error: {str(e)}'}), 500
 
-app.config['SECRET_KEY'] = 'thisisasecretkey'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret')
 bcrypt = Bcrypt(app)
 db = DatabaseManager()
 
