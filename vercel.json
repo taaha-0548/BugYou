@@ -16,6 +16,7 @@
     { "src": "/user_profile/(.*)", "dest": "/frontend/user_profile/$1" },
     { "src": "/leaderboard/(.*)", "dest": "/frontend/leaderboard/$1" },
     { "src": "/assets/(.*)", "dest": "/frontend/Assets/$1" },
+    { "src": "/Assets/(.*)", "dest": "/frontend/Assets/$1" },
     { "src": "/(.*)", "dest": "/frontend/home/home.html" }
   ]
 } 
