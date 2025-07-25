@@ -21,7 +21,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError, Email
 # Import our database functions
-from database_config import (
+from .database_config import (
     get_challenges_by_language_difficulty, 
     get_challenge_by_id,
     get_user_by_username,
@@ -1140,7 +1140,7 @@ def mark_challenge_completed_api():
         # Award XP if challenge was not already completed
         xp_result = None
         if result:
-            from database_config import update_user_score
+            from .database_config import update_user_score
             xp_result = update_user_score(username, score)
         
         response_data = {'success': True, 'message': 'Challenge marked as completed'}
@@ -1314,7 +1314,7 @@ def api_signup():
         result = db.execute_query(insert_query, (username, hashed_pw, email, fullname), fetch_one=True)
         if result:
             # Initialize leaderboard entry for new user
-            from database_config import initialize_user_leaderboard
+            from .database_config import initialize_user_leaderboard
             initialize_user_leaderboard(username)
             
             return jsonify({'success': True, 'user': {'user_id': result['user_id'], 'username': result['username']}})
