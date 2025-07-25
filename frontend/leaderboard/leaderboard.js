@@ -81,7 +81,7 @@ class Leaderboard {
 
         try {
             // Build API URL with filters
-            let url = '/api/leaderboard?limit=50';
+            let url = 'https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api/leaderboard?limit=50';
             if (this.currentFilter !== 'overall') {
                 url += `&filter_type=${this.currentFilter}`;
                 if (this.currentFilterValue) {
@@ -156,7 +156,7 @@ class Leaderboard {
 
     async loadUserPosition(username) {
         try {
-            const response = await fetch(`/api/leaderboard/user/${username}`);
+            const response = await fetch(`https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api/leaderboard/user/${username}`);
             const data = await response.json();
 
             if (data.success) {

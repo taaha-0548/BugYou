@@ -2,7 +2,7 @@
 console.log('JS loaded 🎉');  // Test log to verify script loading
 
 // Configuration
-const API_BASE = '/api';  // Flask backend (relative path for Vercel)
+const API_BASE = 'https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api';  // Flask backend (absolute URL for separate deployment)
 let editor;
 let currentLanguage = 'python';
 let currentDifficulty = 'basic';

@@ -53,7 +53,7 @@ class UserProfile {
         try {
             this.showLoading(true);
             
-            const response = await fetch(`/api/user/${this.currentUser}/profile`);
+            const response = await fetch(`https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api/user/${this.currentUser}/profile`);
             const data = await response.json();
             
             if (data.success) {

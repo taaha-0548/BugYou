@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     try {
-      const res = await fetch('/api/signup', {
+      const res = await fetch('https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fullname, email, username, password })
