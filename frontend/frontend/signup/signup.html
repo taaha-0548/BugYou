@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BugYou - Sign Up</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./signup.css" />
+</head>
+
+<body>
+  <div class="content">
+      <div class="bg-aurora" aria-hidden="true"></div>
+      <div class="bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="blob blob-4"></div>
+        <div class="blob blob-5"></div>
+    </div>
+    <div class="bg-pattern"></div>
+    <header class="navbar">
+      <div class="logo">
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <span class="logo-text">BugYou</span>
+      </div>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <a href="/guide">Guide</a>
+        <a href="/login">Login</a>
+        <a href="/signup">Sign Up</a>
+      </nav>
+    </header>
+
+    <main class="signup-content">
+      <div class="signup-container">
+        <div class="signup-header">
+          <h1 class="main-title">Sign Up</h1>
+          <p class="subtitle">Upskill your programming skills and compete against others</p>
+        </div>
+
+        <form method="POST" class="signup-form">
+          <div class="form-group">
+            <label for="fullname">Full Name</label>
+            <input type="text" id="fullname" name="fullname" class="input" placeholder="Enter your full name" required>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="input" placeholder="Enter your email" required>
+          </div>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" class="input" placeholder="Choose a username" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="input" placeholder="Create a password" required>
+          </div>
+
+          <button type="submit" class="btn">Sign Up →</button>
+          
+          <div class="form-footer">
+            <p>Already have an account? <a href="/login" class="link">Login.</a></p>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
