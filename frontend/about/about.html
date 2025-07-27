@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About - BugYou</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="./about.css" />
 </head>
 
 <body>
   <div class="content">
+    <div class="bg-aurora" aria-hidden="true"></div>
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <div class="blob blob-4"></div>
+      <div class="blob blob-5"></div>
+    </div>
+    <div class="bg-pattern"></div>
     <header class="navbar">
       <div class="logo">
         <img src="/Assets/logo.png" alt="BugYou Logo" class="logo-img">
@@ -39,8 +50,10 @@
         <h2 class="developer-title">Developer</h2>
         <div class="developer-card">
           <div class="linkedin-badge">
-            <div class="badge-base LI-profile-badge" data-locale="en_US" data-size="medium" data-theme="light" data-type="HORIZONTAL" data-vanity="muhammad-taaha-6ba8b7286" data-version="v1">
-              <a class="badge-base__link LI-simple-link" href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286?trk=profile-badge"></a>
+            <div class="badge-base LI-profile-badge" data-locale="en_US" data-size="medium" data-theme="light"
+              data-type="HORIZONTAL" data-vanity="muhammad-taaha-6ba8b7286" data-version="v1">
+              <a class="badge-base__link LI-simple-link"
+                href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286?trk=profile-badge"></a>
             </div>
           </div>
           <div class="developer-name">Muhammad Taaha</div>
@@ -61,13 +74,16 @@
       <section class="description">
         <div class="text-block">
           <p>
-            <strong>BugYou</strong> is a platform designed for the modern programmer — where <span class="highlight">debugging</span> isn't just a skill, it's a superpower.
+            <strong>BugYou</strong> is a platform designed for the modern programmer — where <span
+              class="highlight">debugging</span> isn't just a skill, it's a superpower.
           </p>
         </div>
 
         <div class="text-block">
           <p>
-            In a world rapidly evolving with <span class="highlight">AI-generated code</span>, the need to write from scratch is decreasing. But the demand for <strong>problem solvers</strong> — people who can fix, optimize, and understand what's under the hood — is skyrocketing.
+            In a world rapidly evolving with <span class="highlight">AI-generated code</span>, the need to write from
+            scratch is decreasing. But the demand for <strong>problem solvers</strong> — people who can fix, optimize,
+            and understand what's under the hood — is skyrocketing.
           </p>
         </div>
 
@@ -80,13 +96,16 @@
 
         <div class="features-list">
           <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Debugging challenges</span> styled like LeetCode problems — from logical bugs to runtime surprises.</span>
+            <span class="feature-text"><span class="highlight">Debugging challenges</span> styled like LeetCode problems
+              — from logical bugs to runtime surprises.</span>
           </div>
           <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Error analysis tasks</span> that sharpen your eye for detail and edge cases.</span>
+            <span class="feature-text"><span class="highlight">Error analysis tasks</span> that sharpen your eye for
+              detail and edge cases.</span>
           </div>
           <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Logic building exercises</span> that help you approach code like a detective, not just a coder.</span>
+            <span class="feature-text"><span class="highlight">Logic building exercises</span> that help you approach
+              code like a detective, not just a coder.</span>
           </div>
         </div>
 
@@ -104,7 +123,8 @@
             <span class="benefit-text">Recognize <strong>hidden errors</strong> in complex code.</span>
           </div>
           <div class="benefit-item">
-            <span class="benefit-text">Become more <strong>AI-proof</strong> by doing what AI can't: <em>think critically.</em></span>
+            <span class="benefit-text">Become more <strong>AI-proof</strong> by doing what AI can't: <em>think
+                critically.</em></span>
           </div>
         </div>
 
@@ -121,17 +141,17 @@
       </div>
     </main>
   </div>
-  
+
   <script>
     // Check if user is logged in and show profile section
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       const username = localStorage.getItem('currentUser');
       if (username) {
         const userProfile = document.getElementById('userProfile');
         const currentUsername = document.getElementById('currentUsername');
         const userInfo = document.getElementById('userInfo');
         const leaderboardLink = document.getElementById('leaderboardLink');
-        
+
         if (userProfile) userProfile.style.display = 'flex';
         if (currentUsername) currentUsername.textContent = username;
         if (leaderboardLink) leaderboardLink.style.display = 'inline-flex';
@@ -140,7 +160,7 @@
             window.location.href = '/user_profile';
           });
         }
-        
+
         // Hide login and signup buttons for logged-in users
         const loginLink = document.querySelector('a[href="/login"]');
         const signupLink = document.querySelector('a[href="/signup"]');
@@ -156,4 +176,5 @@
     });
   </script>
 </body>
+
 </html>

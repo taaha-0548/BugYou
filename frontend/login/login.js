@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     try {
-      const res = await fetch('https://bug-you-4frc-2qzzj8dse-muhammad-taahas-projects.vercel.app/api/login', {
+      const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
