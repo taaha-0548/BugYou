@@ -1192,7 +1192,7 @@ async function markChallengeAsCompletedWithTime(timeTaken, score) {
             
             // Update the current challenge to show as solved
             currentChallenge.is_solved = true;
-            updateChallengeDisplay();
+         
             
             // Update XP display if new level reached
             if (data.new_level) {
@@ -1643,6 +1643,11 @@ async function submitSolution() {
                 testResults = data.test_results;
                 console.log("passed");
                 updateTestResults();
+            }
+            // Always reveal all hints for this challenge on successful solve
+            if (currentChallenge && Array.isArray(challengeHints)) {
+                revealedHints = challengeHints.map((_, idx) => idx);
+                updateHintsDisplay();
             }
             // Only show modal if all tests passed
             showSubmissionModal(data);
