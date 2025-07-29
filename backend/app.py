@@ -39,7 +39,8 @@ from database_config import (
     get_leaderboard_data,
     get_user_leaderboard_position,
     update_leaderboard_entry,
-    update_leaderboard_ranks
+    update_leaderboard_ranks,
+    clear_user_cache
 )
 
 # --- Additions from app.py for backend optimizations ---
@@ -546,6 +547,34 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+
+
+@app.route('/api/cache/clear', methods=['POST', 'GET'])
+def clear_cache_endpoint():
+    """Clear all caches"""
+    try:
+        username = None
+        if request.method == 'POST' and request.is_json:
+            username = request.json.get('username') if request.json else None
+        elif request.method == 'GET':
+            username = request.args.get('username')
+            
+        clear_user_cache(username)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Cache cleared for {"user: " + username if username else "all users"}',
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
+
 @app.route('/api/challenges')
 @cache_result(timeout=60)  # Cache for 1 minute
 def get_challenges():
@@ -867,17 +896,25 @@ def validate_submission():
         difficulty = data.get('difficulty')
         # --- Fetch hidden test cases if challenge_id/difficulty provided ---
         all_test_cases = test_cases or []
+        use_cached_visible = data.get('use_cached_visible', False)
+        
         if challenge_id and difficulty:
             challenge = get_challenge_by_id(language, difficulty, challenge_id)
             if challenge:
                 visible = challenge.get('test_cases', [])
                 hidden = challenge.get('hidden_test_cases', [])
-                # If no test_cases provided, use all from DB
-                if not test_cases:
-                    all_test_cases = visible + hidden
-                # If test_cases provided, append hidden
+                
+                if use_cached_visible:
+                    # Use provided test cases (hidden only) and assume visible passed
+                    all_test_cases = test_cases or hidden
+                    print(f"Using cached visible results, only running {len(all_test_cases)} hidden tests")
                 else:
-                    all_test_cases = test_cases + hidden
+                    # If no test_cases provided, use all from DB
+                    if not test_cases:
+                        all_test_cases = visible + hidden
+                    # If test_cases provided, append hidden
+                    else:
+                        all_test_cases = test_cases + hidden
         # --- Signature discovery and driver generation ---
         try:
             if language == 'python':
@@ -902,6 +939,7 @@ def validate_submission():
             return jsonify({'success': False, 'error': str(e)}), 400
         # Now call run_all_tests_in_batch with the generated driver code
         result = run_all_tests_in_batch(code, language, driver_snippet, all_test_cases)
+        
         # Patch: always return success, all_passed, test_results, error
         response = {
             "success": result.get("success", False),
@@ -910,6 +948,18 @@ def validate_submission():
         }
         if "error" in result:
             response["error"] = result["error"]
+        
+        # Only check if already completed, don't mark as completed yet
+        username = data.get('username')
+        if response.get("success") and response.get("all_passed") and username:
+            try:
+                # Check if already completed
+                already_completed = is_challenge_completed(username, language, difficulty, challenge_id)
+                response["already_completed"] = already_completed
+            except Exception as e:
+                print(f"Error checking challenge completion: {e}")
+                response["already_completed"] = False
+        
         return jsonify(response)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1196,6 +1246,7 @@ def get_user_info(username):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/user/<username>/profile')
+@cache_result(timeout=120)  # Cache for 2 minutes
 def get_user_profile(username):
     """Get user profile information including solved problems"""
     try:
@@ -1224,6 +1275,7 @@ def get_user_profile(username):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/user/stats/<username>')
+@cache_result(timeout=300)  # Cache for 5 minutes
 def get_user_stats_endpoint(username):
     """Get user stats for XP display"""
     try:
@@ -1231,6 +1283,7 @@ def get_user_stats_endpoint(username):
         if user_stats:
             return jsonify({
                 'success': True,
+                'username': user_stats['username'],
                 'xp': user_stats['xp'] or 0,
                 'level': user_stats['level'] or 1
             })
@@ -1269,8 +1322,14 @@ def mark_challenge_completed_api():
         # Award XP if challenge was not already completed
         xp_result = None
         if result:
-            from database_config import update_user_score
+            from database_config import update_user_score, update_leaderboard_entry
             xp_result = update_user_score(username, score)
+            
+            # Update leaderboard entry for this user
+            update_leaderboard_entry(username)
+        
+        # Clear user cache to ensure fresh data
+        clear_user_cache(username)
         
         response_data = {'success': True, 'message': 'Challenge marked as completed'}
         
@@ -1289,13 +1348,15 @@ def mark_challenge_completed_api():
 
 @app.route('/api/leaderboard')
 def get_leaderboard():
-    """Get leaderboard data with optional filters"""
+    """Get leaderboard data with optional filters and caching"""
     try:
         filter_type = request.args.get('filter_type', 'overall')
         filter_value = request.args.get('filter_value')
         limit = int(request.args.get('limit', 50))
         
-        leaderboard_data = get_leaderboard_data(limit, filter_type, filter_value)
+        # Use cached data for better performance
+        from database_config import get_cached_leaderboard_data
+        leaderboard_data = get_cached_leaderboard_data(limit, filter_type, filter_value)
         
         return jsonify({
             'success': True,
@@ -1431,10 +1492,19 @@ def api_signup():
     if not all([fullname, email, username, password]):
         return jsonify({'success': False, 'error': 'Please fill in all fields.'}), 400
     db = DatabaseManager()
-    check_query = "SELECT user_id FROM users WHERE username = %s"
-    existing_user = db.execute_query(check_query, (username,), fetch_one=True)
-    if existing_user:
-        return jsonify({'success': False, 'error': 'Oops! That username is already taken. Please choose another.'}), 409
+    
+    # Check for existing username
+    username_check_query = "SELECT user_id FROM users WHERE username = %s"
+    existing_username = db.execute_query(username_check_query, (username,), fetch_one=True)
+    if existing_username:
+        return jsonify({'success': False, 'error': 'username_exists', 'message': 'Username already exists. Please choose a different username.'}), 409
+    
+    # Check for existing email
+    email_check_query = "SELECT user_id FROM users WHERE emailaddress = %s"
+    existing_email = db.execute_query(email_check_query, (email,), fetch_one=True)
+    if existing_email:
+        return jsonify({'success': False, 'error': 'email_exists', 'message': 'Email address already registered. Please use a different email.'}), 409
+    
     try:
         hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
         insert_query = """

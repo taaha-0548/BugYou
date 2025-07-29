@@ -17,15 +17,43 @@
     <link rel="stylesheet" href="./styles.css?v=8.7">
 </head>
 <body>
+    <!-- Aurora background removed for performance -->
     <div class="app-container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <div class="logo" id="homeLogo" style="cursor: pointer;">
-                    <i class="fas fa-bug"></i>
-                    <span>BugYou</span>
+        <!-- Floating Logo (top left) -->
+        <div class="floating-logo">
+            <div class="logo" id="homeLogo" style="cursor: pointer;">
+                <i class="fas fa-bug"></i>
+                <span>BugYou</span>
+            </div>
+        </div>
+        <!-- Floating Profile (top right) -->
+        <div class="floating-profile">
+            <div class="user-profile-section">
+                <div class="user-info" id="userInfo" style="cursor: pointer;">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="currentUsername">User</span>
+                </div>
+                <div class="xp-bar-container">
+                    <div class="xp-info">
+                        <span class="xp-text">XP: <span id="currentXP">0</span></span>
+                        <span class="level-text">Level: <span id="currentLevel">1</span></span>
+                    </div>
+                    <div class="xp-bar" id="xpBar" data-progress="0%">
+                        <div class="xp-progress" id="xpProgress"></div>
+                    </div>
                 </div>
             </div>
+        </div>
+        <!-- Floating Leaderboard Button -->
+        <div class="floating-leaderboard">
+            <a href="/leaderboard" class="leaderboard-btn" id="leaderboardBtn">
+                <i class="fas fa-trophy"></i>
+                Leaderboard
+            </a>
+        </div>
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left"></div>
             <div class="header-right">
                 <div class="nav-actions">
                     <button class="btn btn-secondary" id="problemsBtn">
@@ -36,9 +64,6 @@
                         <i class="fas fa-lightbulb"></i>
                         Hint
                     </button>
-                    <a href="/leaderboard" class="btn btn-secondary" id="leaderboardBtn" style="display: none;">
-                        Leaderboard
-                    </a>
                     <select id="language" class="language-select">
                         <option value="python">Python</option>
                         <option value="javascript">JavaScript</option>
@@ -57,26 +82,11 @@
                     </button>
                 </div>
                 <div class="score-info">
+                    <span class="timer" id="timer">0:00</span>
                     <span class="score">
                         <i class="fas fa-star"></i>
                         Score: <strong id="scoreValue">4</strong>
                     </span>
-                    <span class="timer" id="timer">0:00</span>
-                </div>
-                <div class="user-profile-section">
-                    <div class="user-info" id="userInfo" style="cursor: pointer;">
-                        <i class="fas fa-user-circle"></i>
-                        <span id="currentUsername">User</span>
-                    </div>
-                    <div class="xp-bar-container">
-                        <div class="xp-info">
-                            <span class="xp-text">XP: <span id="currentXP">0</span></span>
-                            <span class="level-text">Level: <span id="currentLevel">1</span></span>
-                        </div>
-                        <div class="xp-bar" id="xpBar" data-progress="0%">
-                            <div class="xp-progress" id="xpProgress"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </header>
@@ -92,6 +102,7 @@
             <!-- Left Sidebar -->
             <aside class="left-sidebar">
                 <div class="challenge-header">
+                    <div class="challenge-title-row">
                     <h2 class="challenge-title">
                         <i class="fas fa-code"></i>
                         <span id="challengeTitle">Loading challenge...</span>
@@ -100,9 +111,7 @@
                         BASIC
                     </div>
                 </div>
-                
-                <div class="challenge-description" id="challengeDescription">
-                    Loading challenge description...
+                    <div id="solvedTag"></div>
                 </div>
                 
                 <div class="challenge-section">
@@ -375,7 +384,7 @@
                             </div>
                             <div class="xp-item">
                                 <span class="xp-label">XP Progress:</span>
-                                <span class="xp-value" id="xpProgress">0/100</span>
+                                <span class="xp-value" id="modalXpProgress">0/100</span>
                             </div>
                             <div class="xp-item level-up-item" id="levelUpItem" style="display: none;">
                                 <span class="xp-label">🎉 Level Up!</span>

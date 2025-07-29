@@ -6,7 +6,7 @@
     <title>User Profile - BugYou</title>
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     
     <!-- Custom CSS -->
@@ -14,40 +14,40 @@
 </head>
 <body>
     <div class="app-container">
+        <!-- Background Blobs -->
+        <div class="bg-blobs">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
+        </div>
+        
         <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <div class="logo" id="homeLogo" style="cursor: pointer;">
-                    <i class="fas fa-bug"></i>
-                    <span>BugYou</span>
-                </div>
+        <header class="navbar">
+            <div class="logo">
+                <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
+                <span class="logo-text">BugYou</span>
             </div>
-            <div class="header-right">
-                <div class="nav-actions">
-                    <a href="/main_page" class="btn btn-secondary">
-                        <i class="fas fa-code"></i>
-                        Code Editor
-                    </a>
-                    <a href="/leaderboard" class="btn btn-secondary">
-                        Leaderboard
-                    </a>
-                    <a href="/" class="btn btn-secondary">
-                        <i class="fas fa-home"></i>
-                        Home
-                    </a>
-                </div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/guide">Guide</a>
+                <a href="/main_page">Code Editor</a>
+                <a href="/leaderboard">Leaderboard</a>
+            </nav>
+            <div class="user-profile">
                 <div class="user-info">
-                    <span class="username" id="currentUsername">Loading...</span>
-                    <button class="btn btn-primary" id="logoutBtn">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </button>
+                    <i class="fas fa-user-circle"></i>
+                    <span id="currentUsername">Loading...</span>
                 </div>
+                <button class="btn btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
             </div>
         </header>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="profile-content">
             <!-- Profile Header -->
             <section class="profile-header">
                 <div class="profile-avatar">
