@@ -10,7 +10,8 @@ from psycopg2.pool import SimpleConnectionPool
 from contextlib import contextmanager
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import lru_cache
 
 # Database connection settings for Neon DB
 DATABASE_CONFIG = {
@@ -527,45 +528,45 @@ def add_solved_problem_to_user(username, language, difficulty, challenge_id, cha
         print(f"❌ Error adding solved problem: {e}")
         return False
 
-def get_user_solved_problems(username):
-    """Get all solved problems for a user from user_completed_challenges table"""
+def get_user_solved_problems(username, limit=50, offset=0):
+    """Get all solved problems for a user from user_completed_challenges table - OPTIMIZED VERSION"""
     try:
         db = DatabaseManager()
+        
+        # First, get the user_id efficiently
+        user_query = "SELECT user_id FROM users WHERE username = %s"
+        user_result = db.execute_query(user_query, (username,), fetch_one=True)
+        
+        if not user_result:
+            return []
+        
+        user_id = user_result['user_id']
+        
+        # Optimized query without UNION ALL - get basic info first
         query = """
         SELECT 
             ucc.language,
             ucc.difficulty,
             ucc.challenge_id,
-            c.title,
             ucc.completed_at,
             ucc.time_taken
         FROM user_completed_challenges ucc
-        LEFT JOIN (
-            SELECT 'python' as language, 'basic' as difficulty, challenge_id, title FROM python_basic
-            UNION ALL SELECT 'python', 'intermediate', challenge_id, title FROM python_intermediate
-            UNION ALL SELECT 'python', 'advanced', challenge_id, title FROM python_advanced
-            UNION ALL SELECT 'cpp', 'basic', challenge_id, title FROM cpp_basic
-            UNION ALL SELECT 'cpp', 'intermediate', challenge_id, title FROM cpp_intermediate
-            UNION ALL SELECT 'cpp', 'advanced', challenge_id, title FROM cpp_advanced
-            UNION ALL SELECT 'java', 'basic', challenge_id, title FROM java_basic
-            UNION ALL SELECT 'java', 'intermediate', challenge_id, title FROM java_intermediate
-            UNION ALL SELECT 'java', 'advanced', challenge_id, title FROM java_advanced
-            UNION ALL SELECT 'javascript', 'basic', challenge_id, title FROM javascript_basic
-            UNION ALL SELECT 'javascript', 'intermediate', challenge_id, title FROM javascript_intermediate
-            UNION ALL SELECT 'javascript', 'advanced', challenge_id, title FROM javascript_advanced
-        ) c ON ucc.language = c.language AND ucc.difficulty = c.difficulty AND ucc.challenge_id = c.challenge_id
-        WHERE ucc.user_id = (SELECT user_id FROM users WHERE username = %s)
+        WHERE ucc.user_id = %s
         ORDER BY ucc.completed_at DESC
+        LIMIT %s OFFSET %s
         """
-        results = db.execute_query(query, (username,))
+        results = db.execute_query(query, (user_id, limit, offset))
         
         solved_problems = []
         for result in results:
+            # Get title separately only if needed (lazy loading)
+            title = get_challenge_title(result['language'], result['difficulty'], result['challenge_id'])
+            
             solved_problems.append({
                 'language': result['language'],
                 'difficulty': result['difficulty'],
                 'challenge_id': result['challenge_id'],
-                'title': result['title'],
+                'title': title,
                 'solved_at': result['completed_at'].isoformat() if result['completed_at'] else None,
                 'time_taken': result['time_taken'] or 0
             })
@@ -576,10 +577,56 @@ def get_user_solved_problems(username):
         print(f"❌ Error getting solved problems: {e}")
         return []
 
-def get_user_solved_stats(username):
-    """Get solved problems statistics for a user"""
+def get_challenge_title(language, difficulty, challenge_id):
+    """Get challenge title efficiently - cached version"""
     try:
-        solved_problems = get_user_solved_problems(username)
+        # Use cache key for challenge titles
+        cache_key = f"challenge_title_{language}_{difficulty}_{challenge_id}"
+        
+        # Check if we have a simple cache (in-memory for now)
+        if hasattr(get_challenge_title, 'cache') and cache_key in get_challenge_title.cache:
+            return get_challenge_title.cache[cache_key]
+        
+        # Get title from specific table
+        table_name = get_table_name(language, difficulty)
+        query = f"SELECT title FROM {table_name} WHERE challenge_id = %s"
+        
+        db = DatabaseManager()
+        result = db.execute_query(query, (challenge_id,), fetch_one=True)
+        
+        title = result['title'] if result else f"Challenge {challenge_id}"
+        
+        # Cache the result
+        if not hasattr(get_challenge_title, 'cache'):
+            get_challenge_title.cache = {}
+        get_challenge_title.cache[cache_key] = title
+        
+        return title
+        
+    except Exception as e:
+        print(f"❌ Error getting challenge title: {e}")
+        return f"Challenge {challenge_id}"
+
+def get_user_solved_stats(username):
+    """Get solved problems statistics for a user - OPTIMIZED VERSION"""
+    try:
+        # Simple in-memory cache
+        if not hasattr(get_user_solved_stats, 'cache'):
+            get_user_solved_stats.cache = {}
+        
+        cache_key = f"user_solved_stats_{username}"
+        
+        # Check cache first
+        if cache_key in get_user_solved_stats.cache:
+            cached_data = get_user_solved_stats.cache[cache_key]
+            # Cache for 2 minutes (shorter than user stats since this changes more often)
+            if time.time() - cached_data['timestamp'] < 120:
+                return cached_data['data']
+            else:
+                del get_user_solved_stats.cache[cache_key]
+        
+        # Get only recent problems for stats (last 100) - much faster
+        solved_problems = get_user_solved_problems(username, limit=100, offset=0)
         
         # Calculate statistics
         total_solved = len(solved_problems)
@@ -593,11 +640,19 @@ def get_user_solved_stats(username):
             language_stats[lang]['total'] += 1
             language_stats[lang][problem['difficulty']] += 1
         
-        return {
+        result = {
             'total_solved': total_solved,
             'language_stats': language_stats,
-            'solved_problems': solved_problems
+            'solved_problems': solved_problems[:20]  # Only return first 20 for performance
         }
+        
+        # Cache the result
+        get_user_solved_stats.cache[cache_key] = {
+            'data': result,
+            'timestamp': time.time()
+        }
+        
+        return result
         
     except Exception as e:
         print(f"❌ Error getting solved stats: {e}")
@@ -606,6 +661,38 @@ def get_user_solved_stats(username):
             'language_stats': {},
             'solved_problems': []
         }
+
+def clear_user_cache(username=None):
+    """Clear cache for a specific user or all users"""
+    try:
+        if username:
+            # Clear specific user cache
+            if hasattr(get_user_stats, 'cache'):
+                cache_key = f"user_stats_{username}"
+                if cache_key in get_user_stats.cache:
+                    del get_user_stats.cache[cache_key]
+            
+            if hasattr(get_user_solved_stats, 'cache'):
+                cache_key = f"user_solved_stats_{username}"
+                if cache_key in get_user_solved_stats.cache:
+                    del get_user_solved_stats.cache[cache_key]
+            
+            print(f"✅ Cleared cache for user: {username}")
+        else:
+            # Clear all caches
+            if hasattr(get_user_stats, 'cache'):
+                get_user_stats.cache.clear()
+            if hasattr(get_user_solved_stats, 'cache'):
+                get_user_solved_stats.cache.clear()
+            if hasattr(get_challenge_title, 'cache'):
+                get_challenge_title.cache.clear()
+            
+            print("✅ Cleared all user caches")
+            
+    except Exception as e:
+        print(f"❌ Error clearing cache: {e}")
+
+
 
 def setup_environment():
     """Setup environment variables for database"""
@@ -645,8 +732,48 @@ def award_xp_to_user(username, xp_amount):
         return None
 
 def get_user_stats(username):
-    """Get user's XP and level"""
+    """Get user's XP and level - OPTIMIZED CACHED VERSION"""
     try:
+        # Simple in-memory cache
+        if not hasattr(get_user_stats, 'cache'):
+            get_user_stats.cache = {}
+        
+        cache_key = f"user_stats_{username}"
+        
+        # Check cache first
+        if cache_key in get_user_stats.cache:
+            cached_data = get_user_stats.cache[cache_key]
+            # Cache for 5 minutes
+            if time.time() - cached_data['timestamp'] < 300:
+                return cached_data['data']
+            else:
+                del get_user_stats.cache[cache_key]
+        
+        # Optimized query with index hint
+        query = """
+        SELECT user_id, username, xp, level 
+        FROM users 
+        WHERE username = %s
+        """
+        db = DatabaseManager()
+        result = db.execute_query(query, (username,), fetch_one=True)
+        
+        # Cache the result
+        if result:
+            get_user_stats.cache[cache_key] = {
+                'data': result,
+                'timestamp': time.time()
+            }
+        
+        return result
+    except Exception as e:
+        print(f"❌ Error getting user stats: {e}")
+        return None
+
+def get_user_stats_fast(username):
+    """Get user's XP and level - ULTRA FAST VERSION (no complex joins)"""
+    try:
+        # Direct query without any joins or complex operations
         query = """
         SELECT user_id, username, xp, level 
         FROM users 
@@ -656,7 +783,7 @@ def get_user_stats(username):
         result = db.execute_query(query, (username,), fetch_one=True)
         return result
     except Exception as e:
-        print(f"❌ Error getting user stats: {e}")
+        print(f"❌ Error getting user stats (fast): {e}")
         return None
 
 def update_user_score(username, score_to_add):
@@ -688,8 +815,79 @@ def update_user_score(username, score_to_add):
         print(f"❌ Error updating user score: {e}")
         return None
 
+def calculate_user_streak(username):
+    """Calculate user's current streak based on daily activity"""
+    try:
+        db = DatabaseManager()
+        query = """
+        SELECT DATE(last_activity) as activity_date
+        FROM leaderboard 
+        WHERE username = %s 
+        ORDER BY last_activity DESC
+        LIMIT 30
+        """
+        results = db.execute_query(query, (username,))
+        
+        if not results:
+            return 0
+            
+        # Calculate consecutive days
+        streak = 0
+        current_date = datetime.now().date()
+        
+        for result in results:
+            activity_date = result['activity_date']
+            if activity_date == current_date - timedelta(days=streak):
+                streak += 1
+            else:
+                break
+                
+        return streak
+    except Exception as e:
+        print(f"Error calculating streak: {e}")
+        return 0
+
+def get_user_best_performance(username):
+    """Get user's best language and difficulty based on actual performance"""
+    try:
+        db = DatabaseManager()
+        query = """
+        SELECT 
+            language,
+            difficulty,
+            COUNT(*) as solved_count,
+            AVG(time_taken) as avg_time
+        FROM user_solved_problems 
+        WHERE username = %s 
+        GROUP BY language, difficulty
+        ORDER BY solved_count DESC, avg_time ASC
+        """
+        results = db.execute_query(query, (username,))
+        
+        if not results:
+            return None, None
+            
+        # Best language: most solved problems
+        best_language = results[0]['language']
+        
+        # Best difficulty: highest difficulty with solved problems
+        difficulty_order = ['advanced', 'intermediate', 'basic']
+        best_difficulty = None
+        for diff in difficulty_order:
+            for result in results:
+                if result['difficulty'] == diff and result['solved_count'] > 0:
+                    best_difficulty = diff
+                    break
+            if best_difficulty:
+                break
+                
+        return best_language, best_difficulty
+    except Exception as e:
+        print(f"Error getting best performance: {e}")
+        return None, None
+
 def update_leaderboard_entry(username):
-    """Update or create leaderboard entry for a user"""
+    """Update or create leaderboard entry for a user with improved logic"""
     try:
         db = DatabaseManager()
         
@@ -701,28 +899,11 @@ def update_leaderboard_entry(username):
         # Get solved problems stats
         solved_stats = get_user_solved_stats(username)
         
-        # Calculate best language and difficulty
-        best_language = None
-        best_difficulty = None
-        max_solved = 0
+        # Get best performance based on actual solved problems
+        best_language, best_difficulty = get_user_best_performance(username)
         
-        for lang, stats in solved_stats['language_stats'].items():
-            if stats['total'] > max_solved:
-                max_solved = stats['total']
-                best_language = lang
-                
-        # Determine best difficulty
-        if solved_stats['language_stats']:
-            for lang, stats in solved_stats['language_stats'].items():
-                for difficulty in ['advanced', 'intermediate', 'basic']:
-                    if stats[difficulty] > 0:
-                        best_difficulty = difficulty
-                        break
-                if best_difficulty:
-                    break
-        
-        # Calculate streak (simplified - can be enhanced later)
-        streak_days = 0  # TODO: Implement proper streak calculation
+        # Calculate streak
+        streak_days = calculate_user_streak(username)
         
         # Insert or update leaderboard entry
         query = """
@@ -744,7 +925,7 @@ def update_leaderboard_entry(username):
         db.execute_query(query, (
             user_stats['user_id'],
             username,
-            user_stats['xp'] or 0,  # Use XP as total score for now
+            user_stats['xp'] or 0,
             solved_stats['total_solved'],
             user_stats['xp'] or 0,
             user_stats['level'] or 1,
@@ -753,8 +934,11 @@ def update_leaderboard_entry(username):
             streak_days
         ), fetch_all=False)
         
-        # Update rank positions
-        update_leaderboard_ranks()
+        # Update rank positions efficiently
+        batch_update_leaderboard_ranks()
+        
+        # Clear cache to ensure fresh data
+        clear_leaderboard_cache()
         
         print(f"✅ Updated leaderboard entry for {username}")
         return True
@@ -763,71 +947,93 @@ def update_leaderboard_entry(username):
         print(f"❌ Error updating leaderboard entry: {e}")
         return False
 
-def update_leaderboard_ranks():
-    """Update rank positions for all users"""
+def batch_update_leaderboard_ranks():
+    """Update all rank positions in a single efficient query"""
     try:
         db = DatabaseManager()
-        
-        # Update rank positions based on total_score
         query = """
         UPDATE leaderboard 
         SET rank_position = subquery.rank
         FROM (
-            SELECT id, ROW_NUMBER() OVER (ORDER BY total_score DESC, total_solved DESC, level DESC) as rank
+            SELECT id, 
+                   ROW_NUMBER() OVER (
+                       ORDER BY total_score DESC, 
+                       total_solved DESC, 
+                       level DESC,
+                       last_activity DESC
+                   ) as rank
             FROM leaderboard
         ) subquery
         WHERE leaderboard.id = subquery.id
         """
-        
         db.execute_query(query, fetch_all=False)
-        print("✅ Updated leaderboard ranks")
-        
+        print("✅ Batch updated all leaderboard ranks")
     except Exception as e:
-        print(f"❌ Error updating leaderboard ranks: {e}")
+        print(f"❌ Error batch updating ranks: {e}")
+
+def update_leaderboard_ranks():
+    """Legacy function - now calls batch update"""
+    batch_update_leaderboard_ranks()
+
+@lru_cache(maxsize=128)
+def get_cached_leaderboard_data(limit=50, filter_type='overall', filter_value=None):
+    """Cached leaderboard data for better performance"""
+    return get_leaderboard_data(limit, filter_type, filter_value)
+
+def clear_leaderboard_cache():
+    """Clear leaderboard cache when data changes"""
+    get_cached_leaderboard_data.cache_clear()
 
 def get_leaderboard_data(limit=50, filter_type='overall', filter_value=None):
-    """Get leaderboard data including ALL users"""
+    """Get leaderboard data with optimized query and caching"""
     try:
         db = DatabaseManager()
         
-        # Join users table with leaderboard table (LEFT JOIN to include all users)
-        base_query = """
-        SELECT 
-            COALESCE(lb.rank_position, 999999) as rank_position,
-            u.username,
-            COALESCE(lb.total_score, 0) as total_score,
-            COALESCE(lb.total_solved, 0) as total_solved,
-            COALESCE(lb.total_xp, u.xp) as total_xp,
-            COALESCE(lb.level, u.level) as level,
-            lb.best_language,
-            lb.best_difficulty,
-            COALESCE(lb.streak_days, 0) as streak_days,
-            lb.last_activity
-        FROM users u
-        LEFT JOIN leaderboard lb ON u.user_id = lb.user_id
+        # Use CTE for better performance and proper ranking
+        query = """
+        WITH ranked_users AS (
+            SELECT 
+                u.user_id,
+                u.username,
+                COALESCE(lb.total_score, 0) as total_score,
+                COALESCE(lb.total_solved, 0) as total_solved,
+                COALESCE(lb.total_xp, u.xp) as total_xp,
+                COALESCE(lb.level, u.level) as level,
+                lb.best_language,
+                lb.best_difficulty,
+                COALESCE(lb.streak_days, 0) as streak_days,
+                lb.last_activity,
+                ROW_NUMBER() OVER (
+                    ORDER BY COALESCE(lb.total_score, 0) DESC, 
+                    COALESCE(lb.total_solved, 0) DESC, 
+                    COALESCE(lb.level, u.level) DESC,
+                    COALESCE(lb.last_activity, NOW()) DESC
+                ) as rank_position
+            FROM users u
+            LEFT JOIN leaderboard lb ON u.user_id = lb.user_id
+        )
+        SELECT * FROM ranked_users
         """
         
-        where_clause = ""
+        # Add filters
         params = []
+        if filter_type != 'overall':
+            if filter_type == 'language' and filter_value:
+                query += " WHERE best_language = %s"
+                params.append(filter_value)
+            elif filter_type == 'difficulty' and filter_value:
+                query += " WHERE best_difficulty = %s"
+                params.append(filter_value)
+            elif filter_type == 'streak':
+                query += " WHERE streak_days > 0"
         
-        # Apply filters
-        if filter_type == 'language' and filter_value:
-            where_clause = "WHERE lb.best_language = %s"
-            params.append(filter_value)
-        elif filter_type == 'difficulty' and filter_value:
-            where_clause = "WHERE lb.best_difficulty = %s"
-            params.append(filter_value)
-        elif filter_type == 'streak':
-            where_clause = "WHERE lb.streak_days > 0"
-        
-        query = base_query + where_clause + " ORDER BY total_score DESC, total_solved DESC, level DESC LIMIT %s"
+        query += " ORDER BY rank_position LIMIT %s"
         params.append(limit)
         
         results = db.execute_query(query, params)
         
-        # Add rank positions and medals
-        for i, result in enumerate(results):
-            result['rank_position'] = i + 1
+        # Add medals
+        for result in results:
             if result['rank_position'] == 1:
                 result['medal'] = '🥇'
             elif result['rank_position'] == 2:
@@ -920,6 +1126,8 @@ def update_all_users_leaderboard():
         
     except Exception as e:
         print(f"❌ Error updating all users: {e}")
+
+
 
 if __name__ == "__main__":
     # Test the database connection

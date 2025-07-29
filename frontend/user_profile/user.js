@@ -2,12 +2,27 @@
 
 class UserProfile {
     constructor() {
+        // Prevent multiple instances
+        if (window.userProfileInstance) {
+            return window.userProfileInstance;
+        }
+        
         this.currentUser = null;
         this.profileData = null;
+        this.initialized = false;
         this.init();
+        
+        // Store instance globally
+        window.userProfileInstance = this;
     }
 
     async init() {
+        // Prevent multiple initializations
+        if (this.initialized) {
+            console.log('Profile already initialized');
+            return;
+        }
+        
         try {
             // Check if user is logged in
             this.currentUser = localStorage.getItem('currentUser');
@@ -24,6 +39,9 @@ class UserProfile {
             
             // Update UI
             this.updateUI();
+            
+            this.initialized = true;
+            console.log('Profile initialized successfully');
             
         } catch (error) {
             console.error('Error initializing profile:', error);
@@ -74,6 +92,8 @@ class UserProfile {
     updateUI() {
         if (!this.profileData) return;
 
+        console.log('Updating UI...');
+
         // Update header
         this.updateHeader();
         
@@ -91,6 +111,8 @@ class UserProfile {
         
         // Update achievements
         this.updateAchievements();
+        
+        console.log('UI update completed');
     }
 
     updateHeader() {
@@ -291,16 +313,19 @@ class UserProfile {
         const badgesGrid = document.getElementById('badgesGrid');
         if (!badgesGrid) return;
         
-        // Clear existing content
+        // Clear existing content to prevent duplication
         badgesGrid.innerHTML = '';
         
         // Define achievements
         const achievements = this.getAchievements();
         
+        // Add each achievement badge
         achievements.forEach(achievement => {
             const badge = this.createAchievementBadge(achievement);
             badgesGrid.appendChild(badge);
         });
+        
+        console.log(`Updated ${achievements.length} achievements`);
     }
 
     getAchievements() {
@@ -311,7 +336,7 @@ class UserProfile {
             {
                 id: 'first_solve',
                 title: 'First Bug Squashed',
-                description: 'Solve your first challenge',
+                description: 'Complete your first debugging challenge',
                 icon: 'fas fa-bug',
                 unlocked: totalSolved >= 1,
                 condition: 'Solve 1 challenge'
@@ -319,7 +344,7 @@ class UserProfile {
             {
                 id: 'python_master',
                 title: 'Python Master',
-                description: 'Solve 5 Python challenges',
+                description: 'Master Python debugging challenges',
                 icon: 'fab fa-python',
                 unlocked: (languageStats.python?.total || 0) >= 5,
                 condition: 'Solve 5 Python challenges'
@@ -327,7 +352,7 @@ class UserProfile {
             {
                 id: 'javascript_master',
                 title: 'JavaScript Master',
-                description: 'Solve 5 JavaScript challenges',
+                description: 'Master JavaScript debugging challenges',
                 icon: 'fab fa-js-square',
                 unlocked: (languageStats.javascript?.total || 0) >= 5,
                 condition: 'Solve 5 JavaScript challenges'
@@ -335,7 +360,7 @@ class UserProfile {
             {
                 id: 'java_master',
                 title: 'Java Master',
-                description: 'Solve 5 Java challenges',
+                description: 'Master Java debugging challenges',
                 icon: 'fab fa-java',
                 unlocked: (languageStats.java?.total || 0) >= 5,
                 condition: 'Solve 5 Java challenges'
@@ -343,7 +368,7 @@ class UserProfile {
             {
                 id: 'cpp_master',
                 title: 'C++ Master',
-                description: 'Solve 5 C++ challenges',
+                description: 'Master C++ debugging challenges',
                 icon: 'fas fa-code',
                 unlocked: (languageStats.cpp?.total || 0) >= 5,
                 condition: 'Solve 5 C++ challenges'
@@ -351,7 +376,7 @@ class UserProfile {
             {
                 id: 'advanced_solver',
                 title: 'Advanced Solver',
-                description: 'Solve 3 advanced challenges',
+                description: 'Tackle complex debugging challenges',
                 icon: 'fas fa-crown',
                 unlocked: this.countAdvancedSolved() >= 3,
                 condition: 'Solve 3 advanced challenges'
@@ -359,7 +384,7 @@ class UserProfile {
             {
                 id: 'level_5',
                 title: 'Level 5 Achiever',
-                description: 'Reach level 5',
+                description: 'Reach intermediate debugging skills',
                 icon: 'fas fa-star',
                 unlocked: (this.profileData.level || 1) >= 5,
                 condition: 'Reach level 5'
@@ -367,7 +392,7 @@ class UserProfile {
             {
                 id: 'level_10',
                 title: 'Level 10 Master',
-                description: 'Reach level 10',
+                description: 'Become a debugging expert',
                 icon: 'fas fa-star',
                 unlocked: (this.profileData.level || 1) >= 10,
                 condition: 'Reach level 10'
@@ -390,12 +415,16 @@ class UserProfile {
         const badge = document.createElement('div');
         badge.className = `badge ${achievement.unlocked ? 'unlocked' : 'locked'}`;
         
-        badge.innerHTML = `
+        // Create badge content without descriptions
+        const badgeContent = `
             <i class="${achievement.icon} badge-icon"></i>
             <div class="badge-title">${achievement.title}</div>
-            <div class="badge-description">${achievement.description}</div>
-            ${!achievement.unlocked ? `<div class="badge-condition">${achievement.condition}</div>` : ''}
         `;
+        
+        // Only add condition for locked badges
+        const conditionContent = !achievement.unlocked ? `<div class="badge-condition">${achievement.condition}</div>` : '';
+        
+        badge.innerHTML = badgeContent + conditionContent;
         
         return badge;
     }
@@ -473,6 +502,10 @@ class UserProfile {
 }
 
 // Initialize the profile when the page loads
+let userProfileInstance = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    new UserProfile();
+    if (!userProfileInstance) {
+        userProfileInstance = new UserProfile();
+    }
 }); 

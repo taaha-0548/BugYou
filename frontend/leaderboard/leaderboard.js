@@ -4,6 +4,7 @@ class Leaderboard {
         this.currentFilter = 'overall';
         this.currentFilterValue = '';
         this.currentUser = null;
+        this.updateInterval = null;
         this.init();
     }
 
@@ -11,24 +12,47 @@ class Leaderboard {
         this.checkUserLogin();
         this.setupEventListeners();
         this.loadLeaderboard();
+        this.startAutoRefresh();
+    }
+
+    startAutoRefresh() {
+        // Refresh leaderboard every 30 seconds
+        this.updateInterval = setInterval(() => {
+            this.loadLeaderboard();
+        }, 30000);
+    }
+
+    stopAutoRefresh() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+        }
     }
 
     checkUserLogin() {
         const username = localStorage.getItem('currentUser');
         if (username) {
             this.currentUser = username;
-            this.showUserSection(username);
+            this.showUserProfile(username);
             this.loadUserPosition(username);
         }
     }
 
-    showUserSection(username) {
-        const userSection = document.getElementById('userSection');
-        const usernameElement = document.getElementById('currentUsername');
+    showUserProfile(username) {
+        const userProfile = document.getElementById('userProfile');
+        const currentUsername = document.getElementById('currentUsername');
         
-        if (userSection && usernameElement) {
-            userSection.style.display = 'flex';
-            usernameElement.textContent = username;
+        if (userProfile && currentUsername) {
+            userProfile.style.display = 'flex';
+            currentUsername.textContent = username;
+            
+            // Setup user info click
+            const userInfo = document.getElementById('userInfo');
+            if (userInfo) {
+                userInfo.addEventListener('click', () => {
+                    window.location.href = '/user_profile';
+                });
+            }
         }
     }
 
@@ -40,15 +64,6 @@ class Leaderboard {
                 this.handleFilterClick(e);
             });
         });
-
-        // Logout button
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleLogout();
-            });
-        }
     }
 
     handleFilterClick(e) {
@@ -72,12 +87,8 @@ class Leaderboard {
         const leaderboardBody = document.getElementById('leaderboardBody');
         if (!leaderboardBody) return;
 
-        // Show loading
-        leaderboardBody.innerHTML = `
-            <div class="loading">
-                Loading leaderboard...
-            </div>
-        `;
+        // Show loading state
+        this.showLoadingState();
 
         try {
             // Build API URL with filters
@@ -90,16 +101,49 @@ class Leaderboard {
             }
 
             const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
 
             if (data.success) {
                 this.renderLeaderboard(data.leaderboard);
             } else {
-                this.showError('Failed to load leaderboard data');
+                throw new Error(data.error || 'Failed to load leaderboard');
             }
         } catch (error) {
             console.error('Error loading leaderboard:', error);
-            this.showError('Network error while loading leaderboard');
+            this.showErrorState(`Failed to load leaderboard: ${error.message}`);
+        }
+    }
+
+    showLoadingState() {
+        const leaderboardBody = document.getElementById('leaderboardBody');
+        if (leaderboardBody) {
+            leaderboardBody.innerHTML = `
+                <div class="loading-state">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <div class="loading-text">Loading leaderboard...</div>
+                </div>
+            `;
+        }
+    }
+
+    showErrorState(message) {
+        const leaderboardBody = document.getElementById('leaderboardBody');
+        if (leaderboardBody) {
+            leaderboardBody.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="error-text">${message}</div>
+                    <button class="retry-btn" onclick="leaderboard.loadLeaderboard()">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                </div>
+            `;
         }
     }
 
@@ -116,15 +160,39 @@ class Leaderboard {
             return;
         }
 
-        const entries = leaderboardData.map(entry => this.createLeaderboardEntry(entry)).join('');
+        // Validate each entry has required fields
+        const validEntries = leaderboardData.filter(entry => {
+            return entry && entry.username && 
+                   (entry.total_score !== undefined && entry.total_score !== null) &&
+                   (entry.total_solved !== undefined && entry.total_solved !== null) &&
+                   (entry.level !== undefined && entry.level !== null);
+        });
+
+        if (validEntries.length === 0) {
+            leaderboardBody.innerHTML = `
+                <div class="loading">
+                    No valid data available for this filter
+                </div>
+            `;
+            return;
+        }
+
+        const entries = validEntries.map(entry => this.createLeaderboardEntry(entry)).join('');
         leaderboardBody.innerHTML = entries;
     }
 
     createLeaderboardEntry(entry) {
-        const medal = entry.medal || `#${entry.rank_position}`;
+        // Ensure data types are correct
+        const rankPosition = parseInt(entry.rank_position) || 0;
+        const totalScore = parseInt(entry.total_score) || 0;
+        const totalSolved = parseInt(entry.total_solved) || 0;
+        const level = parseInt(entry.level) || 1;
+        const streakDays = parseInt(entry.streak_days) || 0;
+        
+        const medal = entry.medal || `#${rankPosition}`;
         const bestLanguage = entry.best_language ? entry.best_language.toUpperCase() : 'N/A';
         const bestDifficulty = entry.best_difficulty ? entry.best_difficulty.charAt(0).toUpperCase() + entry.best_difficulty.slice(1) : 'N/A';
-        const streakText = entry.streak_days > 0 ? `${entry.streak_days} days` : '0 days';
+        const streakText = streakDays > 0 ? `${streakDays} days` : '0 days';
 
         return `
             <div class="leaderboard-entry">
@@ -132,16 +200,16 @@ class Leaderboard {
                     ${medal}
                 </div>
                 <div class="entry-user">
-                    ${entry.username}
+                    ${entry.username || 'Unknown'}
                 </div>
                 <div class="entry-score">
-                    ${entry.total_score.toLocaleString()}
+                    ${totalScore.toLocaleString()}
                 </div>
                 <div class="entry-solved">
-                    ${entry.total_solved}
+                    ${totalSolved}
                 </div>
                 <div class="entry-level">
-                    ${entry.level}
+                    ${level}
                 </div>
                 <div class="entry-best">
                     <div class="best-language">${bestLanguage}</div>
@@ -172,31 +240,32 @@ class Leaderboard {
     }
 
     showUserPosition(positionData) {
-        const userPositionCard = document.getElementById('userPositionCard');
+        const userPositionSection = document.getElementById('userPositionSection');
         const userRank = document.getElementById('userRank');
         const userScore = document.getElementById('userScore');
         const userSolved = document.getElementById('userSolved');
         const userLevel = document.getElementById('userLevel');
 
-        if (userPositionCard && userRank && userScore && userSolved && userLevel) {
-            userRank.textContent = `#${positionData.rank_position}`;
-            userScore.textContent = positionData.total_score.toLocaleString();
-            userSolved.textContent = positionData.total_solved;
-            userLevel.textContent = positionData.level;
-            userPositionCard.style.display = 'block';
+        if (userPositionSection && userRank && userScore && userSolved && userLevel) {
+            // Ensure data types are correct
+            const rankPosition = parseInt(positionData.rank_position) || 0;
+            const totalScore = parseInt(positionData.total_score) || 0;
+            const totalSolved = parseInt(positionData.total_solved) || 0;
+            const level = parseInt(positionData.level) || 1;
+            
+            userRank.textContent = `#${rankPosition}`;
+            userScore.textContent = totalScore.toLocaleString();
+            userSolved.textContent = totalSolved;
+            userLevel.textContent = level;
+            userPositionSection.style.display = 'block';
         }
     }
 
     hideUserPosition() {
-        const userPositionCard = document.getElementById('userPositionCard');
-        if (userPositionCard) {
-            userPositionCard.style.display = 'none';
+        const userPositionSection = document.getElementById('userPositionSection');
+        if (userPositionSection) {
+            userPositionSection.style.display = 'none';
         }
-    }
-
-    handleLogout() {
-        localStorage.removeItem('currentUser');
-        window.location.reload();
     }
 
     showError(message) {
@@ -212,6 +281,7 @@ class Leaderboard {
 }
 
 // Initialize leaderboard when DOM is loaded
+let leaderboard;
 document.addEventListener('DOMContentLoaded', () => {
-    new Leaderboard();
+    leaderboard = new Leaderboard();
 }); 
