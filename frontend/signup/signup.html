@@ -5,14 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BugYou - Sign Up</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="./signup.css" />
 </head>
 
 <body>
   <div class="content">
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+    
     <header class="navbar">
       <div class="logo">
-        <img src="/Assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
         <span class="logo-text">BugYou</span>
       </div>
       <nav>
@@ -52,6 +59,8 @@
             <input type="password" id="password" name="password" class="input" placeholder="Create a password" required>
           </div>
 
+          <div class="error-message" id="signup-error" style="display: none;"></div>
+
           <button type="submit" class="btn">Sign Up →</button>
           
           <div class="form-footer">
@@ -61,5 +70,6 @@
       </div>
     </main>
   </div>
+  <script src="./signup.js"></script>
 </body>
 </html>

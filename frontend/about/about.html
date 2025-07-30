@@ -1,19 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About - BugYou</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="./about.css" />
 </head>
 
 <body>
   <div class="content">
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
     <header class="navbar">
       <div class="logo">
-        <img src="/Assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
         <span class="logo-text">BugYou</span>
       </div>
       <nav>
@@ -34,104 +41,248 @@
     </header>
 
     <main class="about-content">
-      <!-- Developer Section -->
+      <!-- Developers Section -->
       <section class="developer-section">
-        <h2 class="developer-title">Developer</h2>
-        <div class="developer-card">
-          <div class="linkedin-badge">
-            <div class="badge-base LI-profile-badge" data-locale="en_US" data-size="medium" data-theme="light" data-type="HORIZONTAL" data-vanity="muhammad-taaha-6ba8b7286" data-version="v1">
-              <a class="badge-base__link LI-simple-link" href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286?trk=profile-badge"></a>
+        <h2 class="developer-title">Meet the Team</h2>
+        <div class="developers-container">
+          <div class="developer-card">
+            <div class="linkedin-badge">
+              <div class="badge-base LI-profile-badge" data-locale="en_US" data-size="medium" data-theme="light"
+                data-type="HORIZONTAL" data-vanity="muhammad-taaha-6ba8b7286" data-version="v1">
+                <a class="badge-base__link LI-simple-link"
+                  href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286?trk=profile-badge"></a>
+              </div>
+            </div>
+            <div class="developer-name">Muhammad Taaha</div>
+            <div class="developer-role">Creator & Backend Developer</div>
+            <div class="linkedin-logo">
+              <a href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286" target="_blank">
+                <div class="linkedin-icon">
+                  <i class="fab fa-linkedin"></i>
+                </div>
+                <img src="/assets/profile_pic.jpg" alt="Muhammad Taaha" class="profile-pic">
+              </a>
             </div>
           </div>
-          <div class="developer-name">Muhammad Taaha</div>
-          <div class="developer-role">Creator</div>
-          <div class="linkedin-logo">
-            <a href="https://pk.linkedin.com/in/muhammad-taaha-6ba8b7286" target="_blank">
-              <div class="linkedin-icon">
-                <i class="fab fa-linkedin"></i>
-              </div>
-              <img src="/Assets/profile_pic.jpg" alt="Muhammad Taaha" class="profile-pic">
-            </a>
+          
+          <div class="developer-card">
+            <div class="developer-name">Dua Siraj</div>
+            <div class="developer-role">UI/UX Designer</div>
+            <div class="linkedin-logo">
+              <a href="https://www.linkedin.com/in/duaa-siraj-68b6261b4/" target="_blank">
+                <div class="linkedin-icon">
+                  <i class="fab fa-linkedin"></i>
+                </div>
+                <img src="/assets/duaa_jpg.jpeg" alt="Dua Siraj" class="profile-pic">
+              </a>
+            </div>
           </div>
         </div>
       </section>
 
       <h1 class="main-title">About BugYou</h1>
 
+      <!-- Hero Section -->
+      <section class="hero-section">
+        <div class="hero-content">
+          <p class="hero-text">
+            <strong>BugYou</strong> is a platform designed for the modern programmer — where <span
+              class="highlight">debugging</span> isn't just a skill, it's a superpower.
+          </p>
+        </div>
+      </section>
+
+      <!-- Platform Overview -->
       <section class="description">
         <div class="text-block">
           <p>
-            <strong>BugYou</strong> is a platform designed for the modern programmer — where <span class="highlight">debugging</span> isn't just a skill, it's a superpower.
+            In a world rapidly evolving with <span class="highlight">AI-generated code</span>, the need to write from
+            scratch is decreasing. But the demand for <strong>problem solvers</strong> — people who can fix, optimize,
+            and understand what's under the hood — is skyrocketing.
           </p>
         </div>
 
         <div class="text-block">
           <p>
-            In a world rapidly evolving with <span class="highlight">AI-generated code</span>, the need to write from scratch is decreasing. But the demand for <strong>problem solvers</strong> — people who can fix, optimize, and understand what's under the hood — is skyrocketing.
+            That's where BugYou comes in. We're not your typical coding platform. We focus on the <span class="highlight">art of debugging</span> — 
+            turning you into a code detective who can spot, analyze, and fix bugs with ninja-like precision.
           </p>
         </div>
+      </section>
 
-        <div class="text-block">
-          <p>
-            That's where BugYou comes in.
-            It's not your typical coding site. We focus on:
-          </p>
-        </div>
-
-        <div class="features-list">
-          <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Debugging challenges</span> styled like LeetCode problems — from logical bugs to runtime surprises.</span>
+      <!-- How It Works Section -->
+      <section class="how-it-works">
+        <h2 class="section-title">How It Works</h2>
+        <div class="workflow-container">
+          <div class="workflow-step">
+            <div class="step-icon">
+              <i class="fas fa-code"></i>
+            </div>
+            <h3 class="step-title">Get a Buggy Code</h3>
+            <p class="step-description">Receive pre-written code with hidden bugs - from syntax errors to logical flaws</p>
           </div>
-          <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Error analysis tasks</span> that sharpen your eye for detail and edge cases.</span>
+          
+          <div class="workflow-step">
+            <div class="step-icon">
+              <i class="fas fa-search"></i>
+            </div>
+            <h3 class="step-title">Analyze & Debug</h3>
+            <p class="step-description">Use our integrated code editor to find and fix the bugs. Test your solutions in real-time.</p>
           </div>
-          <div class="feature-item">
-            <span class="feature-text"><span class="highlight">Logic building exercises</span> that help you approach code like a detective, not just a coder.</span>
+          
+          <div class="workflow-step">
+            <div class="step-icon">
+              <i class="fas fa-trophy"></i>
+            </div>
+            <h3 class="step-title">Earn Points & Level Up</h3>
+            <p class="step-description">Score points for correct fixes, climb the leaderboard, and unlock new challenges.</p>
           </div>
         </div>
+      </section>
 
-        <div class="text-block">
-          <p>
-            Whether you're a beginner or an experienced developer, BugYou will help you:
-          </p>
+      <!-- Features Section -->
+      <section class="features-section">
+        <h2 class="section-title">Platform Features</h2>
+        
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-bug"></i>
+            </div>
+            <h3 class="feature-title">Debugging Challenges</h3>
+            <p class="feature-description">Real-world bug scenarios across multiple programming languages - Python, JavaScript, Java, and C++.</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-lightbulb"></i>
+            </div>
+            <h3 class="feature-title">Smart Hint System</h3>
+            <p class="feature-description">Get strategic hints when stuck, but use them wisely - each hint affects your final score.</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-chart-line"></i>
+            </div>
+            <h3 class="feature-title">XP & Leveling</h3>
+            <p class="feature-description">Earn experience points, level up your debugging skills, and track your progress over time.</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-medal"></i>
+            </div>
+            <h3 class="feature-title">Competitive Leaderboard</h3>
+            <p class="feature-description">Compete with other debuggers worldwide. Climb the ranks and prove your debugging prowess.</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <h3 class="feature-title">Timed Challenges</h3>
+            <p class="feature-description">Race against the clock to fix bugs quickly and efficiently. Speed matters in the real world.</p>
+          </div>
+          
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-code-branch"></i>
+            </div>
+            <h3 class="feature-title">Multi-Language Support</h3>
+            <p class="feature-description">Practice debugging in Python, JavaScript, Java, and C++. Master the quirks of each language.</p>
+          </div>
         </div>
+      </section>
 
+      <!-- Benefits Section -->
+      <section class="benefits-section">
+        <h2 class="section-title">Why Choose BugYou?</h2>
+        
         <div class="benefits-list">
           <div class="benefit-item">
-            <span class="benefit-text">Build <strong>core logic skills</strong>.</span>
+            <span class="benefit-text">Build <strong>core logic skills</strong> that AI can't replicate.</span>
           </div>
           <div class="benefit-item">
-            <span class="benefit-text">Recognize <strong>hidden errors</strong> in complex code.</span>
+            <span class="benefit-text">Recognize <strong>hidden errors</strong> in complex code structures.</span>
           </div>
           <div class="benefit-item">
             <span class="benefit-text">Become more <strong>AI-proof</strong> by doing what AI can't: <em>think critically.</em></span>
           </div>
+          <div class="benefit-item">
+            <span class="benefit-text">Develop <strong>real-world debugging</strong> skills that employers value.</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-text">Join a <strong>competitive community</strong> of problem solvers.</span>
+          </div>
         </div>
+      </section>
 
-        <div class="text-block closing">
-          <p>
-            We're here to make debugging fun, competitive, and addictive. Ready to train your bug radar?
+      <!-- Scoring System -->
+      <section class="scoring-section">
+        <h2 class="section-title">Scoring System</h2>
+        <div class="scoring-grid">
+          <div class="score-item positive">
+            <div class="score-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="score-details">
+              <h4>Perfect Fix</h4>
+              <p>+10 points</p>
+            </div>
+          </div>
+          
+          <div class="score-item negative">
+            <div class="score-icon">
+              <i class="fas fa-lightbulb"></i>
+            </div>
+            <div class="score-details">
+              <h4>Hint Used</h4>
+              <p>-2 points</p>
+            </div>
+          </div>
+          
+          <div class="score-item negative">
+            <div class="score-icon">
+              <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="score-details">
+              <h4>Wrong Submission</h4>
+              <p>-5 points</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Call to Action -->
+      <section class="cta-section">
+        <div class="cta-content">
+          <h2 class="cta-title">Ready to Become a Debug Ninja?</h2>
+          <p class="cta-description">
+            Join thousands of developers who are mastering the art of debugging. 
+            Start your journey today and discover the thrill of hunting down bugs!
           </p>
         </div>
       </section>
 
       <div class="action-buttons">
-        <a href="/" class="btn">Start Debugging</a>
+        <a href="/main_page" class="btn">Start Debugging</a>
+        <a href="/guide" class="btn secondary">Learn How to Play</a>
         <a href="/" class="btn secondary">Back to Home</a>
       </div>
     </main>
   </div>
-  
+
   <script>
     // Check if user is logged in and show profile section
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       const username = localStorage.getItem('currentUser');
       if (username) {
         const userProfile = document.getElementById('userProfile');
         const currentUsername = document.getElementById('currentUsername');
         const userInfo = document.getElementById('userInfo');
         const leaderboardLink = document.getElementById('leaderboardLink');
-        
+
         if (userProfile) userProfile.style.display = 'flex';
         if (currentUsername) currentUsername.textContent = username;
         if (leaderboardLink) leaderboardLink.style.display = 'inline-flex';
@@ -140,7 +291,7 @@
             window.location.href = '/user_profile';
           });
         }
-        
+
         // Hide login and signup buttons for logged-in users
         const loginLink = document.querySelector('a[href="/login"]');
         const signupLink = document.querySelector('a[href="/signup"]');
@@ -156,4 +307,5 @@
     });
   </script>
 </body>
+
 </html>

@@ -11,9 +11,14 @@
 
 <body>
   <div class="content">
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
     <header class="navbar">
       <div class="logo">
-        <img src="/Assets/logo.png" alt="BugYou Logo" class="logo-img">
+        <img src="/assets/logo.png" alt="BugYou Logo" class="logo-img">
         <span class="logo-text">BugYou</span>
       </div>
       <nav>
@@ -35,79 +40,182 @@
     </header>
 
     <main class="guide-content">
-      <h1 class="main-title">How it works</h1>
+      <h1 class="main-title">How to Solve Challenges</h1>
 
-      <section class="instructions">
-        <div class="text-block">
-          <p><strong>Welcome to BugYou!</strong> Here's how to become a debugging wizard:</p>
-        </div>
-
-        <div class="section-card">
-          <h2 class="section-title">Objective</h2>
-          <p>
-            You'll be given a <strong>prewritten code snippet</strong> that contains one or more bugs. Your job is to:
+      <!-- Hero Section -->
+      <section class="hero-section">
+        <div class="hero-content">
+          <p class="hero-text">
+            Ready to become a <span class="highlight">debugging ninja</span>? Here's your complete guide to solving challenges and earning points.
           </p>
-          <div class="objective-list">
-            <div class="objective-item">Analyze the code carefully</div>
-            <div class="objective-item">Fix any errors (logical, syntax, or runtime)</div>
-            <div class="objective-item">Ensure <strong>all test cases pass</strong></div>
+        </div>
+      </section>
+
+      <!-- Overview Section -->
+      <section class="description">
+        <div class="text-block">
+          <p>
+            Each challenge contains <strong>buggy code</strong> with errors. Your mission: identify bugs, fix them, and submit a working solution that passes all test cases.
+          </p>
+        </div>
+      </section>
+
+      <!-- Step-by-Step Process -->
+      <section class="process-section">
+        <h2 class="section-title">Step-by-Step Process</h2>
+        <div class="process-container">
+          <div class="process-step">
+            <div class="step-icon">
+              <i class="fas fa-eye"></i>
+            </div>
+            <h3 class="step-title">1. Read</h3>
+            <p class="step-description">Carefully read the challenge description and understand what the code should accomplish. Identify the expected inputs and outputs.</p>
+          </div>
+          
+          <div class="process-step">
+            <div class="step-icon">
+              <i class="fas fa-search"></i>
+            </div>
+            <h3 class="step-title">2. Analyze</h3>
+            <p class="step-description">Examine the provided code for bugs - syntax errors, logical flaws, or runtime issues. Look for patterns and potential edge cases.</p>
+          </div>
+          
+          <div class="process-step">
+            <div class="step-icon">
+              <i class="fas fa-code"></i>
+            </div>
+            <h3 class="step-title">3. Fix</h3>
+            <p class="step-description">Edit the code in the integrated editor. Fix all identified bugs while maintaining the original logic and function structure.</p>
+          </div>
+          
+          <div class="process-step">
+            <div class="step-icon">
+              <i class="fas fa-play"></i>
+            </div>
+            <h3 class="step-title">4. Run</h3>
+            <p class="step-description">Click the "Run" button to test your code against the provided test cases. Verify that all outputs match the expected results.</p>
+          </div>
+          
+          <div class="process-step">
+            <div class="step-icon">
+              <i class="fas fa-paper-plane"></i>
+            </div>
+            <h3 class="step-title">5. Submit</h3>
+            <p class="step-description">Once all test cases pass successfully, submit your solution to earn points and track your progress on the leaderboard.</p>
           </div>
         </div>
+      </section>
 
-        <div class="section-card">
-          <h2 class="section-title">Example Task</h2>
-          <p>A sample question might look like this:</p>
-          <div class="example-placeholder">
-            <div class="code-block">
-              <div class="code-header">Buggy Code</div>
-              <div class="code-content">
-                def find_bug(numbers):<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;total = 0<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;for i in range(len(numbers)):<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total += numbers[i]  # Bug here!<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;return total
-              </div>
+      <!-- Example Challenge -->
+      <section class="example-section">
+        <h2 class="section-title">Example Challenge</h2>
+        <p>Here's what a typical challenge looks like:</p>
+        <div class="example-placeholder">
+          <div class="code-block">
+            <div class="code-header">Buggy Code</div>
+            <div class="code-content">
+              def calculate_sum(numbers):<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;total = 0<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;for i in range(len(numbers)):<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total += numbers[i]  # Bug: should handle empty list<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;return total
             </div>
           </div>
         </div>
+        <p class="example-note">Your job: Find the bug and fix it to make all test cases pass!</p>
+      </section>
 
-        <div class="section-card">
-          <h2 class="section-title">Hints</h2>
-          <p>You can request hints during a challenge. However:</p>
-          <div class="hint-list">
-            <div class="hint-item">Each hint you take <strong>deducts points</strong></div>
-            <div class="hint-item">Use them wisely — your final score depends on it!</div>
+      <!-- Understanding Test Cases -->
+      <section class="test-cases-section">
+        <h2 class="section-title">Understanding Test Cases</h2>
+        <div class="test-cases-content">
+          <p>Test cases verify your solution works correctly with different inputs. You can see the visible test cases below, but there may be additional hidden test cases checked during submission.</p>
+          <div class="test-case-example">
+            <div class="test-case-item">
+              <span class="test-label">Test Case 1:</span> <code>Input: [1, 2, 3, 4] → Expected: 10</code>
+            </div>
+            <div class="test-case-item">
+              <span class="test-label">Test Case 2:</span> <code>Input: [] → Expected: 0</code>
+            </div>
+            <div class="test-case-item">
+              <span class="test-label">Test Case 3:</span> <code>Input: [5] → Expected: 5</code>
+            </div>
+          </div>
+          <p class="test-note">All test cases must pass for your solution to be accepted and earn points!</p>
+        </div>
+      </section>
+
+      <!-- Using Hints -->
+      <section class="hints-section">
+        <h2 class="section-title">Using Hints</h2>
+        <div class="hints-content">
+          <p>When you're stuck on a challenge, you can request hints:</p>
+          <div class="hint-features">
+            <div class="hint-feature">
+              <i class="fas fa-lightbulb"></i>
+              <span>Click the "Hint" button in the challenge interface to get help</span>
+            </div>
+            <div class="hint-feature">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>Each hint deducts 2 points from your final score</span>
+            </div>
+            <div class="hint-feature">
+              <i class="fas fa-balance-scale"></i>
+              <span>Use hints strategically - they affect your leaderboard ranking</span>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div class="section-card">
-          <h2 class="section-title">Scoring System</h2>
-          <div class="scoring-list">
-            <div class="scoring-item">Correct fix without hints: <strong>10 points</strong></div>
-            <div class="scoring-item">Each hint used: <strong>-2 points</strong></div>
-            <div class="scoring-item">Wrong submission: <strong>-5 points</strong></div>
-            <div class="scoring-item">All test cases must pass to score</div>
+      <!-- Scoring System -->
+      <section class="scoring-section">
+        <h2 class="section-title">Scoring System</h2>
+        <div class="scoring-grid">
+          <div class="score-item positive">
+            <div class="score-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="score-details">
+              <h4>Perfect Fix</h4>
+              <p>+10 points</p>
+            </div>
+          </div>
+          
+          <div class="score-item negative">
+            <div class="score-icon">
+              <i class="fas fa-lightbulb"></i>
+            </div>
+            <div class="score-details">
+              <h4>Hint Used</h4>
+              <p>-2 points</p>
+            </div>
+          </div>
+          
+          <div class="score-item negative">
+            <div class="score-icon">
+              <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="score-details">
+              <h4>Wrong Submission</h4>
+              <p>-5 points</p>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div class="section-card">
-          <h2 class="section-title">Tips for Success</h2>
-          <div class="tips-list">
-            <div class="tip-item">Read the test case descriptions before editing</div>
-            <div class="tip-item">Use print/debug statements to trace logic</div>
-            <div class="tip-item">Think like a compiler — what would break?</div>
-          </div>
-        </div>
-
-        <div class="text-block closing">
-          <p>
-            That's it! Ready to find the bugs and earn your stripes? Go to <a href="/login">Login</a> or <a href="/signup">Sign Up</a> to begin.
+      <!-- Call to Action -->
+      <section class="cta-section">
+        <div class="cta-content">
+          <h2 class="cta-title">Ready to Start Debugging?</h2>
+          <p class="cta-description">
+            Now you know how to tackle challenges! Head to the main page and start solving bugs to earn points and climb the leaderboard.
           </p>
         </div>
       </section>
 
       <div class="action-buttons">
-        <a href="/" class="btn">Start Debugging</a>
+        <a href="/main_page" class="btn">Start Debugging</a>
+        <a href="/about" class="btn secondary">Learn About BugYou</a>
         <a href="/" class="btn secondary">Back to Home</a>
       </div>
     </main>

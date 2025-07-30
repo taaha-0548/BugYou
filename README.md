@@ -5,43 +5,9 @@
 [![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-yellow.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![Code Execution](https://img.shields.io/badge/Code%20Execution-Piston%20API-orange.svg)](https://piston.readthedocs.io)
 
----
+A comprehensive platform for debugging challenges where users fix buggy code across multiple programming languages. Features dynamic challenge loading, output-based validation, and professional admin interface.
 
-## 🚀 Cloud Deployment (Vercel)
-
-You can deploy BugYou to the cloud for free using [Vercel](https://vercel.com/). This will serve both your Flask backend (as a serverless function) and your static frontend.
-
-### **Quick Steps:**
-1. **Push your code to GitHub.**
-2. **Go to [Vercel](https://vercel.com/import/git) and import your repo.**
-3. **When asked for the root directory, select the project root (not `api`, not `frontend`).**
-4. **Leave build/output settings blank.**
-5. **Add the following environment variables in the Vercel dashboard:**
-
-| Key         | Value                                                        |
-|-------------|--------------------------------------------------------------|
-| DB_NAME     | neondb                                                       |
-| DB_USER     | neondb_owner                                                 |
-| DB_PASSWORD | (your NeonDB password)                                       |
-| DB_HOST     | (your NeonDB host)                                           |
-| DB_SSLMODE  | require                                                      |
-| SECRET_KEY  | (any strong random string)                                   |
-
-6. **Click Deploy!**
-
-- The home page will be at `/`.
-- The main code editor is at `/main_page`.
-- The backend API is at `/api/*` (e.g., `/api/health`).
-
-**Note:**
-- All backend code is now in `api/index.py` (not `backend/app.py`).
-- All backend dependencies are in `api/requirements.txt`.
-- All static frontend files are in the `frontend/` directory.
-- Routing is controlled by `vercel.json` in the project root.
-
----
-
-# 🎯 What is BugYou?
+## 🎯 What is BugYou?
 
 BugYou is an interactive debugging platform that helps students and developers improve their debugging skills by fixing buggy code across multiple programming languages. Each challenge presents broken code that needs to be fixed, with real-time testing and instant feedback.
 
@@ -56,56 +22,25 @@ BugYou is an interactive debugging platform that helps students and developers i
 
 ```
 BugYou/
-├── api/                      # Flask API Server (for Vercel)
-│   ├── index.py              # Main Flask application (serverless entrypoint)
-│   └── requirements.txt      # Python dependencies for backend
-├── backend/                  # Database config and setup scripts
-│   ├── database_config.py    # Database connection and functions
-│   ├── trying.exe            # (Binary, likely not needed for most users)
-│   └── __pycache__/          # Python bytecode cache (auto-generated)
-├── frontend/                 # Web Interface (static files)
-│   ├── Assets/               # Static assets (images, video, etc.)
-│   │   ├── profile_pic.jpg
-│   │   ├── logo.png
-│   │   ├── login.mp4
-│   │   └── about_bg.png
-│   ├── leaderboard/          # Leaderboard page
-│   │   ├── leaderboard.css
-│   │   ├── leaderboard.js
-│   │   └── leaderboard.html
-│   ├── user_profile/         # User profile page
-│   │   ├── user.css
-│   │   ├── user.js
-│   │   └── user.html
-│   ├── main_page/            # Main code editor and challenges
-│   │   ├── script.js
-│   │   ├── styles.css
-│   │   └── index.html
-│   ├── home/                 # Home page
-│   │   ├── home.html
-│   │   └── home.css
-│   ├── signup/               # Signup page
-│   │   ├── signup.html
-│   │   ├── signup.js
-│   │   └── signup.css
-│   ├── login/                # Login page
-│   │   ├── login.html
-│   │   ├── login.js
-│   │   └── login.css
-│   ├── guide/                # Guide page
-│   │   ├── guide.html
-│   │   └── guide.css
-│   ├── admin/                # Admin interface
-│   │   └── admin.html
-│   └── about/                # About page
-│       ├── about.html
-│       └── about.css
-├── vercel.json               # Vercel routing and build configuration
-├── start_server.py           # (Legacy/local dev startup script)
-├── README.md                 # This file
-└── LICENSE                   # MIT License
+├── backend/                 # Flask API Server
+│   ├── app.py              # Main Flask application
+│   ├── database_config.py  # Database connection and functions
+│   ├── run_server.py       # Alternative server startup
+│   ├── setup_db.py         # Database setup script
+│   ├── config.env          # Environment configuration
+│   ├── requirements.txt    # Python dependencies
+│   ├── database_setup.sql  # Database schema (creates empty tables)
+│   ├── sample_data.sql     # Sample challenges (IMPORTANT!)
+│   └── documentation/
+├── frontend/               # Web Interface
+│   ├── index.html         # Main application interface
+│   ├── add_challenge.html # Admin challenge creation
+│   ├── script.js          # Frontend JavaScript
+│   └── styles.css         # Application styling
+├── start_server.py        # Main startup script
+├── README.md              # This file
+└── LICENSE                # MIT License
 ```
-
 
 ## 🚀 Complete Setup Guide
 
